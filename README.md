@@ -3,6 +3,12 @@
 Self-hosted, multi-user temporary email on **Cloudflare Workers, D1 and Email Routing**.
 Private inboxes, a responsive web dashboard, and selectable **Owner / Admin / Dev / Member** roles.
 
+> **Cloudflare and your own domain are required for real incoming email.**
+> You need a Cloudflare account and a domain whose DNS is managed by Cloudflare.
+> Downloading this repository does not activate an email service. Local mode is
+> for trying the application; follow the [deployment guide](docs/deployment.md)
+> to configure Workers, D1, DNS and Email Routing for your own instance.
+
 This repository contains application source and synthetic tests, not a hosted public
 mail service. All domains and deployment identifiers in the default configuration
 are placeholders. No production credentials, mailbox data or operational backups
