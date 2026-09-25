@@ -85,20 +85,44 @@ export async function receiveEmail(message: ForwardableEmailMessage, env: Env): 
       throw new InvalidMail("Invalid email content.");
     }
     // The converter only traverses a parsed DOM; links/resources are never fetched.
-    body = (
-      parsed.text ??
-      convert((parsed.html ?? "").slice(0, MAX_RAW_BYTES), {
-        wordwrap: false,
-        limits: { maxInputLength: MAX_RAW_BYTES, maxDepth: 64, maxChildNodes: 10_000 },
-        selectors: [
-          { selector: "a", options: { ignoreHref: true } },
-          ...["img", "script", "style", "iframe", "object", "embed"].map((selector) => ({
-            selector,
-            format: "skip",
-          })),
-        ],
-      })
-    ).slice(0, MAX_BODY_CHARS);
+    let htmlText = "";
+    try {
+      if (parsed.html) {
+        htmlText = convert(parsed.html.slice(0, MAX_RAW_BYTES), {
+          wordwrap: false,
+          // PostalMime can combine inline mixed parts outside a nested <body>.
+          baseElements: { selectors: [] },
+          limits: { maxInputLength: MAX_RAW_BYTES, maxDepth: 64, maxChildNodes: 10_000 },
+          selectors: [
+            ...["h1", "h2", "h3", "h4", "h5", "h6"].map((selector) => ({
+              selector,
+              options: { uppercase: false },
+            })),
+            { selector: "a", options: { ignoreHref: true } },
+            ...["http", "https"].map((scheme) => ({
+              selector: `a[href^="${scheme}://" i]`,
+              format: "anchor",
+              options: {
+                ignoreHref: false,
+                hideLinkHrefIfSameAsText: true,
+                linkBrackets: ["[", "]"],
+              },
+            })),
+            ...["head", "img", "script", "style", "iframe", "object", "embed"].map((selector) => ({
+              selector,
+              format: "skip",
+            })),
+          ],
+        });
+      }
+    } catch {
+      // A display formatter failure must not reject a usable plain alternative.
+      // MIME validation above and retryable storage failures below stay separate.
+      if (!parsed.text?.trim()) throw new InvalidMail("Invalid email content.");
+    }
+    // Some senders supply only an HTML-viewing notice in the plain alternative.
+    // Keep readable HTML content as inert text; fall back for empty/image-only HTML.
+    body = (htmlText.trim() ? htmlText : (parsed.text ?? "")).slice(0, MAX_BODY_CHARS);
     subject = (parsed.subject ?? "").slice(0, 500);
   } catch (error) {
     // Do not expose parser diagnostics or include D1 operations in this catch.

@@ -126,6 +126,315 @@ async function back(page: Page) {
   if (await page.locator("#back-inboxes").isVisible()) await page.locator("#back-inboxes").click();
 }
 
+function deferred() {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { held, release };
+}
+
+for (const intent of ["selection", "search", "automatic read"])
+  test(`U1 pending favorite preserves ${intent} intent`, async ({ page }) => {
+    await page.clock.install();
+    const data = await setup(page);
+    const favorite = deferred();
+    let started = false;
+    await page.route("**/api/inboxes/b", async (route) => {
+      started = true;
+      await favorite.held;
+      return route.fallback();
+    });
+    await page.route("**/api/inboxes/b/messages", (route) =>
+      route.fulfill({ json: { messages: [mail("b1", "b")], nextCursor: null } }),
+    );
+    await page.goto("/");
+    await openInbox(page);
+    await expect(page.locator(".message-item")).toHaveCount(1);
+    await back(page);
+    await page.getByRole("button", { name: "Favorit beta@example.com", exact: true }).click();
+    await expect.poll(() => started).toBe(true);
+    try {
+      if (intent === "selection") {
+        await page
+          .getByRole("button", { name: "Buka kotak masuk beta@example.com", exact: true })
+          .click();
+        await expect(page.getByRole("button", { name: "Baca Pesan b1" })).toBeVisible();
+      } else {
+        await openInbox(page);
+        if (intent === "search") {
+          await page.locator("#message-search").fill("synthetic needle");
+          await page.clock.fastForward(400);
+          await expect
+            .poll(() => data.calls.filter((call) => call.includes("q=")))
+            .toEqual(["GET /api/inboxes/a/messages?q=synthetic+needle"]);
+          await expect(page.locator(".message-item")).toHaveCount(1);
+        } else {
+          await page.locator(".message-item").click();
+          await expect(page.locator("#message-body")).toHaveText(mail().body);
+          await expect
+            .poll(() => data.patches)
+            .toEqual([{ path: "/api/messages/a1", isRead: true }]);
+          await expect(page.locator("#toggle-read")).toHaveText("Tandai belum dibaca");
+          await expect(page.locator("#toggle-read")).toBeEnabled();
+        }
+      }
+    } finally {
+      favorite.release();
+    }
+    await expect(page.locator("#notice")).toContainText("ditambahkan ke favorit");
+    await back(page);
+    await expect(
+      page.getByRole("button", { name: "Favorit beta@example.com", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+test("U2 failed inbox deletion makes an interrupted reader retryable", async ({ page }) => {
+  await setup(page);
+  const detail = deferred();
+  let started = false;
+  await page.route(
+    "**/api/messages/a1",
+    async (route) => {
+      started = true;
+      await detail.held;
+      return route.fallback();
+    },
+    { times: 1 },
+  );
+  await page.route("**/api/inboxes/a", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: { code: "BUSY", message: "Synthetic deletion failure." } },
+    }),
+  );
+  await page.goto("/");
+  await openInbox(page);
+  await page.locator(".message-item").click();
+  await expect.poll(() => started).toBe(true);
+  await expect(page.locator("#reader-state")).toContainText("Memuat");
+  if (await page.locator("#back-messages").isVisible())
+    await page.locator("#back-messages").click();
+  await page.locator("#delete-inbox").click();
+  await page.locator("#confirm-delete").click();
+  await expect(page.locator("#delete-error")).toContainText("Synthetic deletion failure");
+  await page.locator("#cancel-delete").click();
+  // Mobile navigation hides the reader; inspect its actual hidden attribute without reopening.
+  try {
+    await expect(page.locator("#retry-reader")).not.toHaveAttribute("hidden", "");
+    await expect(page.locator("#reader-state")).toContainText("Pemuatan terhenti");
+  } finally {
+    detail.release();
+  }
+  // Invoke the existing retry control, including when its mobile pane is hidden.
+  await page.locator("#retry-reader").dispatchEvent("click");
+  await expect(page.locator("#message-body")).toHaveText(mail().body);
+  await expect(page.locator("#retry-reader")).toBeHidden();
+});
+
+for (const first of ["patch", "detail"])
+  test(`U3 same-message reopen reconciles pending read mutation when ${first} finishes first`, async ({
+    page,
+  }) => {
+    const data = await setup(page);
+    data.messages[0].isRead = true;
+    const snapshot = { ...data.messages[0] };
+    const patch = deferred();
+    const detail = deferred();
+    let patchStarted = false;
+    let detailStarted = false;
+    await page.goto("/");
+    await openInbox(page);
+    await page.locator(".message-item").click();
+    await expect(page.locator("#toggle-read")).toHaveText("Tandai belum dibaca");
+    await page.route("**/api/messages/a1", async (route) => {
+      if (route.request().method() === "PATCH") {
+        patchStarted = true;
+        await patch.held;
+        return route.fallback();
+      }
+      detailStarted = true;
+      await detail.held;
+      return route.fulfill({ json: { message: snapshot } });
+    });
+    await page.locator("#toggle-read").click();
+    await expect.poll(() => patchStarted).toBe(true);
+    if (await page.locator("#back-messages").isVisible())
+      await page.locator("#back-messages").click();
+    await page.locator(".message-item").click();
+    await expect.poll(() => detailStarted).toBe(true);
+    try {
+      if (first === "detail") {
+        detail.release();
+        await expect(page.locator("#message-body")).toHaveText(snapshot.body);
+        await expect(page.locator("#toggle-read")).toBeDisabled();
+      }
+      patch.release();
+      await expect.poll(() => data.messages[0].isRead).toBe(false);
+      await expect(page.locator(".message-item")).toHaveClass(/is-unread/);
+      detail.release();
+      await expect(page.locator("#message-body")).toHaveText(snapshot.body);
+      await expect(page.locator("#toggle-read")).toBeEnabled();
+      await expect(page.locator("#toggle-read")).toHaveText("Tandai dibaca");
+      expect(data.patches).toEqual([{ path: "/api/messages/a1", isRead: false }]);
+    } finally {
+      patch.release();
+      detail.release();
+    }
+  });
+
+test("U1 failed favorite retains the latest inbox and search scope", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = window.fetch;
+    window.fetch = (input, init) => original(input, { ...init, signal: undefined });
+  });
+  const data = await setup(page);
+  const favorite = deferred();
+  const oldSearch = deferred();
+  let searchStarted = false;
+  await page.route("**/api/inboxes/b", async (route) => {
+    await favorite.held;
+    return route.fulfill({
+      status: 503,
+      json: { error: { code: "BUSY", message: "Synthetic favorite failure." } },
+    });
+  });
+  await page.route("**/api/inboxes/a/messages?q=old", async (route) => {
+    searchStarted = true;
+    await oldSearch.held;
+    return route.fulfill({ json: { messages: [mail("stale")], nextCursor: null } });
+  });
+  await page.route("**/api/inboxes/b/messages**", (route) =>
+    route.fulfill({ json: { messages: [mail("b1", "b")], nextCursor: null } }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "Favorit beta@example.com", exact: true }).click();
+  await openInbox(page);
+  await page.locator("#message-search").fill("old");
+  await page.locator("#message-search").press("Enter");
+  await expect.poll(() => searchStarted).toBe(true);
+  await back(page);
+  await page.getByRole("button", { name: "Buka kotak masuk beta@example.com" }).click();
+  await page.locator("#message-search").fill("current");
+  await page.locator("#message-search").press("Enter");
+  await expect(page.getByRole("button", { name: "Baca Pesan b1" })).toBeVisible();
+  const response = page.waitForResponse("**/api/inboxes/a/messages?q=old");
+  oldSearch.release();
+  await (await response).finished();
+  favorite.release();
+  await expect(page.locator("#notice")).toContainText("Synthetic favorite failure");
+  await expect(page.locator("#selected-address")).toHaveText(data.inboxes[1].address);
+  await expect(page.locator("#message-search")).toHaveValue("current");
+  await expect(page.locator(".message-summary")).toHaveText("Pesan b1");
+  await expect(page.locator("#refresh-messages")).toBeEnabled();
+});
+
+test("U1 stale favorite completion cannot release a newer session mutation", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = window.fetch;
+    window.fetch = (input, init) => original(input, { ...init, signal: undefined });
+  });
+  await setup(page);
+  const oldFavorite = deferred();
+  const newFavorite = deferred();
+  let attempts = 0;
+  await page.route("**/api/inboxes/b", async (route) => {
+    const attempt = ++attempts;
+    expect(route.request().headers()["x-plato-user"]).toBe("owner");
+    await (attempt === 1 ? oldFavorite.held : newFavorite.held);
+    return route.fulfill({ json: { ok: true } });
+  });
+  await page.goto("/");
+  const button = page.getByRole("button", { name: "Favorit beta@example.com", exact: true });
+  await button.click();
+  await expect.poll(() => attempts).toBe(1);
+  await page.locator("#logout").click();
+  await expect(page.locator("#login-submit")).toBeEnabled();
+  await page.locator("#username").fill("synthetic-operator");
+  await page.locator("#password").fill("synthetic-password");
+  await page.locator("#login-submit").click();
+  await button.click();
+  await expect.poll(() => attempts).toBe(2);
+  const response = page.waitForResponse("**/api/inboxes/b");
+  oldFavorite.release();
+  await (await response).finished();
+  await openInbox(page);
+  await expect(page.locator(".message-item")).toHaveCount(1);
+  await page.locator(".message-item").click();
+  await expect(page.locator("#toggle-read")).toHaveText("Tandai belum dibaca");
+  await expect(page.locator("#delete-message")).toBeDisabled();
+  await expect(page.locator("#notice")).toBeHidden();
+  newFavorite.release();
+  await expect(page.locator("#delete-message")).toBeEnabled();
+  await expect(page.locator("#notice")).toContainText("ditambahkan ke favorit");
+});
+
+test("U2 failed deletion does not replace a newer same-message reader request", async ({
+  page,
+}) => {
+  await setup(page);
+  const deletion = deferred();
+  const detail = deferred();
+  let details = 0;
+  let deleting = false;
+  await page.route("**/api/messages/a1", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    details++;
+    await detail.held;
+    return route.fallback();
+  });
+  await page.route("**/api/inboxes/a", async (route) => {
+    deleting = true;
+    await deletion.held;
+    return route.fulfill({
+      status: 503,
+      json: { error: { code: "BUSY", message: "Synthetic deletion failure." } },
+    });
+  });
+  await page.goto("/");
+  await openInbox(page);
+  await page.locator(".message-item").click();
+  await expect.poll(() => details).toBe(1);
+  if (await page.locator("#back-messages").isVisible())
+    await page.locator("#back-messages").click();
+  await page.locator("#delete-inbox").click();
+  await page.locator("#confirm-delete").click();
+  await expect.poll(() => deleting).toBe(true);
+  // Exercise supersession under the modal through the real DOM event handler.
+  // The message identity is unchanged, but the new request owns the reader.
+  await page.locator(".message-item").dispatchEvent("click");
+  await expect.poll(() => details).toBe(2);
+  deletion.release();
+  await expect(page.locator("#delete-error")).toContainText("Synthetic deletion failure");
+  await page.locator("#cancel-delete").click();
+  await expect(page.locator("#reader-state")).toContainText("Memuat");
+  await expect(page.locator("#retry-reader")).toHaveAttribute("hidden", "");
+  detail.release();
+  await expect(page.locator("#message-body")).toHaveText(mail().body);
+});
+
+test("U3 later detail remains authoritative after a completed local read change", async ({
+  page,
+}) => {
+  const data = await setup(page);
+  await page.goto("/");
+  await openInbox(page);
+  await page.locator(".message-item").click();
+  await expect(page.locator("#toggle-read")).toHaveText("Tandai belum dibaca");
+  await page.locator("#toggle-read").click();
+  await expect(page.locator("#toggle-read")).toHaveText("Tandai dibaca");
+  // A different session changed the server state after our local PATCH.
+  data.messages[0].isRead = true;
+  if (await page.locator("#back-messages").isVisible())
+    await page.locator("#back-messages").click();
+  await page.locator(".message-item").click();
+  await expect(page.locator("#toggle-read")).toHaveText("Tandai belum dibaca");
+  expect(data.patches).toEqual([
+    { path: "/api/messages/a1", isRead: true },
+    { path: "/api/messages/a1", isRead: false },
+  ]);
+});
+
 test("account dialog keyboard cancel clears secrets and restores focus", async ({ page }) => {
   await setup(page);
   await page.goto("/");

@@ -22,6 +22,7 @@ const state = {
 };
 let epoch = 0;
 let mutation = null;
+let favoriteMutation = null;
 let authBusy = false;
 let authOperation = null;
 let loginRequired = false;
@@ -42,6 +43,7 @@ let roleBusy = null;
 let notificationBusy = false;
 let notificationFailure = "";
 let readRevision = 0;
+let readerRevision = 0;
 const cooldowns = { login: 0, password: 0 };
 const refresh = new Map();
 const pendingReads = new Set();
@@ -208,6 +210,7 @@ function view(name, focusId) {
   if (focusId && matchMedia("(max-width: 1023px)").matches) $(focusId).focus();
 }
 function clearReader() {
+  readerRevision += 1;
   abortRequest("detail");
   state.message = null;
   state.messageId = null;
@@ -281,6 +284,7 @@ function resetPrivate() {
   text("notice", "");
   for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
   mutation = null;
+  favoriteMutation = null;
   confirmation = null;
   state.session = null;
   state.inspectedUser = null;
@@ -318,6 +322,7 @@ function resetPrivate() {
 }
 function updateControls() {
   const busy = Boolean(mutation);
+  const messagesBusy = busy && mutation !== favoriteMutation;
   const readOnly = Boolean(state.inspectedUser);
   show("new-inbox", !readOnly);
   show("delete-inbox", !readOnly);
@@ -330,9 +335,9 @@ function updateControls() {
   $("cancel-delete").disabled = busy;
   $("delete-inbox").disabled = busy || readOnly || !state.inbox;
   $("delete-message").disabled = busy || readOnly || !state.message;
-  $("refresh-messages").disabled = !state.inbox || requests.has("messages") || busy;
+  $("refresh-messages").disabled = !state.inbox || requests.has("messages") || messagesBusy;
   $("refresh-inboxes").disabled = requests.has("inboxes") || busy;
-  $("load-more").disabled = requests.has("messages") || busy;
+  $("load-more").disabled = requests.has("messages") || messagesBusy;
   $("login-submit").disabled = authBusy || logoutFailed || cooldowns.login > Date.now();
   $("retry-session").disabled = authBusy;
   $("retry-logout").disabled = authBusy;
@@ -341,7 +346,7 @@ function updateControls() {
   $("password-submit").disabled = passwordBusy || cooldowns.password > Date.now();
   $("cancel-password").disabled = passwordBusy;
   $("toggle-read").disabled =
-    readOnly || !state.message || pendingReads.has(state.messageId) || busy;
+    readOnly || !state.message || pendingReads.has(state.messageId) || messagesBusy;
   text("toggle-read", state.message?.isRead ? "Tandai belum dibaca" : "Tandai dibaca");
   for (const button of document.querySelectorAll(".favorite")) button.disabled = busy;
   renderRefresh();
@@ -703,7 +708,13 @@ function renderMessages() {
   updateControls();
 }
 async function loadMessages({ more = false, quiet = false } = {}) {
-  if (!state.session || !state.inbox || requests.has("messages") || mutation) return;
+  if (
+    !state.session ||
+    !state.inbox ||
+    requests.has("messages") ||
+    (mutation && mutation !== favoriteMutation)
+  )
+    return;
   if (quiet && state.messagesStatus === "error") return;
   const id = state.inbox.id;
   const cursor = more ? state.nextCursor : null;
@@ -786,6 +797,8 @@ async function loadMessages({ more = false, quiet = false } = {}) {
 async function readMessage(id) {
   if (!state.session || !state.inbox) return;
   const inboxId = state.inbox.id;
+  const revision = readRevision;
+  const readPending = pendingReads.has(id);
   clearReader();
   state.messageId = id;
   renderMessages();
@@ -798,6 +811,10 @@ async function readMessage(id) {
     if (state.inbox?.id !== inboxId || state.messageId !== id) return;
     if (!data?.message || data.message.inboxId !== inboxId || data.message.id !== id)
       throw new Error("Pesan tidak sesuai dengan kotak masuk ini.");
+    // As with list snapshots, a detail GET cannot undo a newer committed PATCH.
+    const change = readChanges.get(id);
+    const newerRead = change && change.revision > revision;
+    if (newerRead) data.message.isRead = change.isRead;
     state.message = data.message;
     text("message-subject", data.message.subject || "(Tanpa subjek)");
     text("message-from", data.message.from || "Pengirim tidak diketahui");
@@ -811,7 +828,10 @@ async function readMessage(id) {
     show("delete-message");
     updateControls();
     view("reader", "message-subject");
-    if (!state.inspectedUser && data.message.isRead === false) void setRead(id, inboxId, true);
+    // Reopening during an explicit unread action must not turn that action into
+    // an automatic read when its PATCH finishes before this detail response.
+    if (!state.inspectedUser && !readPending && !newerRead && data.message.isRead === false)
+      void setRead(id, inboxId, true);
   } catch (error) {
     if (!isCanceled(error)) {
       text("reader-state", errorText(error));
@@ -913,6 +933,10 @@ async function deleteConfirmed() {
   if (mutation || !confirmation || !state.session || state.inspectedUser) return;
   const target = confirmation;
   const ticket = Symbol("delete");
+  const version = epoch;
+  // Mobile back navigation may already have aborted this loading reader.
+  const interruptedReader =
+    state.messageId && !state.message && $("retry-reader").hidden ? readerRevision : null;
   mutation = ticket;
   abortRequest("inboxes");
   abortRequest("messages");
@@ -947,7 +971,21 @@ async function deleteConfirmed() {
     renderMessages();
     announce(target.kind === "inbox" ? "Kotak masuk dihapus." : "Pesan dihapus.");
   } catch (error) {
-    if (!isCanceled(error)) setError("delete-error", errorText(error));
+    if (!isCanceled(error)) {
+      setError("delete-error", errorText(error));
+      if (
+        version === epoch &&
+        interruptedReader === readerRevision &&
+        state.inbox?.id === target.inboxId &&
+        state.messageId &&
+        !state.message &&
+        !requests.has("detail")
+      ) {
+        text("reader-state", "Pemuatan terhenti. Silakan coba lagi.");
+        show("reader-state");
+        show("retry-reader");
+      }
+    }
   } finally {
     if (mutation === ticket) mutation = null;
     text("confirm-delete", "Ya, hapus");
@@ -1194,6 +1232,8 @@ async function toggleFavorite(id) {
   const favorite = !inbox.favorite;
   const ticket = Symbol("favorite");
   mutation = ticket;
+  // Keep inbox/destructive operations serialized, but allow message intents.
+  favoriteMutation = ticket;
   abortRequest("inboxes");
   updateControls();
   try {
@@ -1211,11 +1251,18 @@ async function toggleFavorite(id) {
     if (!isCanceled(error)) announce(errorText(error));
   } finally {
     if (mutation === ticket) mutation = null;
+    if (favoriteMutation === ticket) favoriteMutation = null;
     updateControls();
   }
 }
 async function setRead(id, inboxId, isRead) {
-  if (!state.session || mutation || state.inspectedUser || pendingReads.has(id)) return;
+  if (
+    !state.session ||
+    (mutation && mutation !== favoriteMutation) ||
+    state.inspectedUser ||
+    pendingReads.has(id)
+  )
+    return;
   const version = epoch;
   const wasRead =
     state.messageId === id

@@ -172,7 +172,7 @@ describe("MIME ingestion", () => {
     );
   });
 
-  it("prefers text/plain over HTML and discards real MIME attachments", async () => {
+  it("uses readable HTML over the plain alternative and discards real MIME attachments", async () => {
     const body = [
       "--outer",
       'Content-Type: multipart/alternative; boundary="inner"',
@@ -197,10 +197,95 @@ describe("MIME ingestion", () => {
     const item = incoming(mime(body, 'Content-Type: multipart/mixed; boundary="outer"'));
     await receiveEmail(item.message, bindings);
     const row = await bindings.DB.prepare("SELECT * FROM messages").first();
-    expect(row?.body).toBe("Preferred plain text\n");
+    expect(row?.body).toBe("HTML alternative");
     expect(JSON.stringify(row)).not.toContain("SECRET ATTACHMENT");
     expect(JSON.stringify(row)).not.toContain("secret.txt");
-    expect(JSON.stringify(row)).not.toContain("HTML alternative");
+    expect(JSON.stringify(row)).not.toContain("Preferred plain text");
+  });
+
+  it.each(["base64", "quoted-printable"])(
+    "extracts verification content and URLs from a %s HTML alternative instead of the placeholder",
+    async (encoding) => {
+      const html =
+        '<p>Your code: <strong>782345</strong></p><a href="https://verify.example.net/confirm?token=synthetic&amp;source=mail">Verify email</a>';
+      const encoded = encoding === "base64" ? btoa(html) : html.replaceAll("=", "=3D");
+      const body = [
+        "--alternative",
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        "Please open the HTML version of this email.",
+        "--alternative",
+        "Content-Type: text/html; charset=utf-8",
+        `Content-Transfer-Encoding: ${encoding}`,
+        "",
+        encoded,
+        "--alternative--",
+      ].join("\r\n");
+      const item = incoming(
+        mime(body, 'Content-Type: multipart/alternative; boundary="alternative"'),
+      );
+      const network = vi
+        .spyOn(globalThis, "fetch")
+        .mockRejectedValue(new Error("network forbidden"));
+      await receiveEmail(item.message, bindings);
+      expect(item.rejected).toEqual([]);
+      const stored = await bindings.DB.prepare("SELECT body FROM messages").first<string>("body");
+      expect(stored).toContain("Your code: 782345");
+      expect(stored).toContain(
+        "Verify email [https://verify.example.net/confirm?token=synthetic&source=mail]",
+      );
+      expect(stored).not.toContain("Please open the HTML version");
+      expect(stored).not.toContain("<strong>");
+      expect(network).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "",
+    "   ",
+    '<img src="https://remote.invalid/pixel">',
+    "<script>hidden()</script><style>hidden{}</style>",
+  ])(
+    "falls back to the original plain alternative when converted HTML is empty: %j",
+    async (html) => {
+      const body = [
+        "--alternative",
+        "Content-Type: text/plain",
+        "",
+        "Plain fallback 654321",
+        "--alternative",
+        "Content-Type: text/html",
+        "",
+        html,
+        "--alternative--",
+      ].join("\r\n");
+      const item = incoming(
+        mime(body, 'Content-Type: multipart/alternative; boundary="alternative"'),
+      );
+      await receiveEmail(item.message, bindings);
+      expect(item.rejected).toEqual([]);
+      expect(await bindings.DB.prepare("SELECT body FROM messages").first("body")).toBe(
+        "Plain fallback 654321\n",
+      );
+    },
+  );
+
+  it("preserves only HTTP(S) anchor destinations as inert text, including malformed HTML", async () => {
+    const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network forbidden"));
+    const item = incoming(
+      mime(
+        '<p>Code 543210<a href="HTTPS://verify.example.net/token">Uppercase</a><a href="http://verify.example.net/token">HTTP</a><a href="javascript:alert(1)">Script</a><a href="data:text/html,active">Data</a><a href="//remote.invalid/path">Relative</a><img src="https://remote.invalid/pixel">',
+        "Content-Type: text/html",
+      ),
+    );
+    await receiveEmail(item.message, bindings);
+    expect(item.rejected).toEqual([]);
+    const stored = await bindings.DB.prepare("SELECT body FROM messages").first<string>("body");
+    expect(stored).toContain("543210");
+    expect(stored).toContain("HTTPS://verify.example.net/token");
+    expect(stored).toContain("http://verify.example.net/token");
+    expect(stored).not.toMatch(/javascript:|data:text|remote\.invalid|<a|<img/);
+    expect(network).not.toHaveBeenCalled();
   });
 
   it("converts actual HTML to inert text without fetching resources or retaining executable markup", async () => {
@@ -218,6 +303,71 @@ describe("MIME ingestion", () => {
     );
     expect(network).not.toHaveBeenCalled();
   });
+
+  it.each([1, 2, 3, 4, 5, 6])("M1 preserves code and identical URL case in h%i", async (level) => {
+    const url = "https://verify.example.net/Confirm?token=aB7xQ9";
+    const item = incoming(
+      mime(
+        `<h${level}>Code aB7xQ9</h${level}><h${level}><a href="${url}">${url}</a></h${level}>`,
+        "Content-Type: text/html",
+      ),
+    );
+    await receiveEmail(item.message, bindings);
+    expect(item.rejected).toEqual([]);
+    const stored = await bindings.DB.prepare("SELECT body FROM messages").first<string>("body");
+    expect(stored).toContain("Code aB7xQ9");
+    expect(stored).toContain(url);
+    expect(stored).not.toContain("AB7XQ9");
+  });
+
+  it.each([
+    "<body><p>Company footer</p></body>",
+    "<html><head><title>Hidden title</title><style>hidden{}</style></head><body><p>Company footer</p></body></html>",
+  ])("M2 preserves separate inline mixed content outside the HTML body: %s", async (html) => {
+    const body = [
+      "--mixed",
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "Your code: aB7xQ9",
+      "--mixed",
+      "Content-Type: text/html; charset=utf-8",
+      "",
+      html,
+      "--mixed--",
+    ].join("\r\n");
+    const item = incoming(mime(body, 'Content-Type: multipart/mixed; boundary="mixed"'));
+    await receiveEmail(item.message, bindings);
+    expect(item.rejected).toEqual([]);
+    const stored = await bindings.DB.prepare("SELECT body FROM messages").first<string>("body");
+    expect(stored).toContain("Your code: aB7xQ9");
+    expect(stored).toContain("Company footer");
+    expect(stored).not.toMatch(/Hidden title|hidden\{\}|<body|<div/);
+  });
+
+  it.each(["I", "i"])(
+    "M3 preserves usable plaintext when %s list conversion fails",
+    async (type) => {
+      const body = [
+        "--alternative",
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        "Recovery code: aB7xQ9",
+        "--alternative",
+        "Content-Type: text/html; charset=utf-8",
+        "",
+        `<ol type="${type}" start="10000"><li>Recovery code: aB7xQ9</li></ol>`,
+        "--alternative--",
+      ].join("\r\n");
+      const item = incoming(
+        mime(body, 'Content-Type: multipart/alternative; boundary="alternative"'),
+      );
+      await receiveEmail(item.message, bindings);
+      expect(item.rejected).toEqual([]);
+      expect(await bindings.DB.prepare("SELECT body FROM messages").first("body")).toBe(
+        "Recovery code: aB7xQ9\n",
+      );
+    },
+  );
 
   it("caps stored decoded body, subject, and envelope sender", async () => {
     const item = incoming(

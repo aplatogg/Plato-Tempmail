@@ -110,6 +110,52 @@ test("real Worker assets, cookie auth, MIME ingestion and cross-device mailbox",
     await expect
       .poll(() => bindings.DB.prepare("SELECT COUNT(*) AS n FROM messages").first("n"))
       .toBe(0);
+    // Real MIME -> D1 -> authenticated API -> reader for HTML-only verification content.
+    const remoteRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("example.net")) remoteRequests.push(request.url());
+    });
+    await handle.email({
+      from: "sender@example.net",
+      to: "browser-check@example.com",
+      raw: [
+        "From: sender@example.net",
+        "To: browser-check@example.com",
+        "Message-ID: <html-verification@example.net>",
+        "Date: Wed, 23 Sep 2026 12:01:00 +0000",
+        "Subject: HTML verification",
+        "MIME-Version: 1.0",
+        'Content-Type: multipart/alternative; boundary="verify"',
+        "",
+        "--verify",
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        "Please open the HTML version of this email.",
+        "--verify",
+        "Content-Type: text/html; charset=utf-8",
+        "",
+        '<p>Verification code: <b>654321</b></p><a href="https://verify.example.net/confirm?token=synthetic&amp;source=mail">Confirm</a><img src="https://track.example.net/pixel"><script>window.mailExecuted=true</script>',
+        "--verify--",
+      ].join("\r\n"),
+    });
+    if (await page.locator("#back-messages").isVisible())
+      await page.locator("#back-messages").click();
+    await page.locator("#message-search").fill("654321");
+    await page.locator("#message-search").press("Enter");
+    await page.getByRole("button", { name: /HTML verification/ }).click();
+    await expect(page.locator("#message-body")).toContainText("Verification code: 654321");
+    await expect(page.locator("#message-body")).toContainText(
+      "https://verify.example.net/confirm?token=synthetic&source=mail",
+    );
+    await expect(page.locator("#message-body")).not.toContainText("Please open the HTML version");
+    await expect(page.locator("#message-body img, #message-body script")).toHaveCount(0);
+    await expect(page.locator("#otp-candidates")).toContainText("654321");
+    expect(remoteRequests).toEqual([]);
+    await page.locator("#delete-message").click();
+    await page.locator("#confirm-delete").click();
+    await expect
+      .poll(() => bindings.DB.prepare("SELECT COUNT(*) AS n FROM messages").first("n"))
+      .toBe(0);
     if (await page.locator("#back-messages").isVisible())
       await page.locator("#back-messages").click();
     await page.locator("#delete-inbox").click();
