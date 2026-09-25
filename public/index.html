@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="theme-color" content="#f8fafc" />
+    <title>Plato-Tempmail — Kotak masuk Anda</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" type="module"></script>
+  </head>
+  <body>
+    <noscript>Aktifkan JavaScript untuk menggunakan Plato-Tempmail.</noscript>
+    <div id="boot" class="boot" role="status">Memuat Plato-Tempmail…</div>
+
+    <main id="login" class="login-layout" hidden>
+      <section class="login-story" aria-label="Tentang Plato-Tempmail">
+        <div class="brand"><span class="brand-mark" aria-hidden="true">P</span> Plato-<span class="brand-light">Tempmail</span></div>
+        <div class="story-content">
+          <p class="eyebrow">RUANG UNTUK PESAN ANDA</p>
+          <h1>Alamat baru.<br />Kotak masuk yang rapi.</h1>
+          <p>Buat alamat sesuai kebutuhan, terima pesan, dan kelola semuanya dari satu tempat.</p>
+          <div class="story-envelope" aria-hidden="true"><span>@</span></div>
+        </div>
+        <p class="story-foot">Sederhana. Terpusat. Dalam kendali Anda.</p>
+      </section>
+      <section class="login-panel" aria-labelledby="login-title">
+        <div class="login-card">
+          <span class="eyebrow">Plato-Tempmail</span>
+          <h2 id="login-title">Selamat datang kembali</h2>
+          <p class="muted">Masuk untuk mengelola kotak masuk Anda.</p>
+          <form id="login-form">
+            <label for="username">Nama pengguna</label>
+            <input id="username" name="username" autocomplete="username" required maxlength="128" />
+            <label for="password">Kata sandi</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024" aria-describedby="login-error" />
+            <p id="login-error" class="error" role="alert" hidden></p>
+            <p id="login-success" class="success" role="status" hidden></p>
+            <p id="login-retry" class="small" role="status" hidden></p>
+            <button id="login-submit" class="primary full" type="submit">Masuk</button>
+            <button id="retry-session" class="full" type="button" hidden>Coba lagi koneksi</button>
+            <button id="retry-logout" class="full" type="button" hidden>Coba lagi keluar</button>
+          </form>
+          <p class="login-foot">Akses khusus akun yang telah terdaftar.</p>
+          <div class="preferences"><label for="login-theme">Tema</label><select id="login-theme"><option value="system">Sistem</option><option value="light">Terang</option><option value="dark">Gelap</option></select></div>
+          <a class="credit" href="https://github.com/aplatogg" target="_blank" rel="noopener noreferrer">Created by github.com/aplatogg</a>
+        </div>
+      </section>
+    </main>
+
+    <div id="workspace" class="workspace" data-view="inboxes" hidden>
+      <header class="app-header">
+        <div class="brand"><span class="brand-mark" aria-hidden="true">P</span> Plato-<span class="brand-light">Tempmail</span></div>
+        <div class="header-account"><span id="account-name" class="account-name"></span><span id="account-roles" class="role-badges"></span><button id="manage-users" class="quiet" type="button" hidden>Kelola pengguna</button><button id="open-diagnostics" class="quiet" type="button" hidden>Panel teknis</button><button id="account-settings" class="quiet" type="button">Akun</button><button id="logout" class="quiet" type="button">Keluar</button></div>
+      </header>
+      <div id="inspection-banner" class="scope-banner" hidden><p id="inspection-label" role="status"></p><button id="return-own-inboxes" class="small-button" type="button">Kembali ke inbox saya</button></div>
+      <p id="admin-disclosure" class="scope-disclosure" hidden>Owner dapat membaca inbox Anda. Admin tanpa peran Owner tidak dapat mengakses inbox pengguna lain.</p>
+      <main class="mail-layout">
+        <aside id="sidebar" class="sidebar pane" aria-labelledby="inbox-title">
+          <div class="sidebar-top">
+            <div class="section-heading"><h1 id="inbox-title">Kotak masuk</h1><span id="inbox-count" class="badge">0</span></div>
+            <p class="muted small">Alamat berbeda, satu ruang kerja.</p>
+            <button id="new-inbox" class="primary full" type="button"><span aria-hidden="true">＋</span> Kotak masuk baru</button>
+            <label class="search-label" for="inbox-search">Cari kotak masuk</label>
+            <input id="inbox-search" type="search" placeholder="Cari alamat…" autocomplete="off" />
+          </div>
+          <div class="sidebar-scroll">
+            <div class="list-caption"><span id="address-caption">ALAMAT ANDA</span><button id="refresh-inboxes" class="quiet compact" type="button" aria-label="Segarkan kotak masuk">↻</button></div>
+            <div id="inboxes-state" class="state small" role="status"></div>
+            <button id="retry-inboxes" class="retry" type="button" hidden>Coba lagi kotak masuk</button>
+            <ul id="inbox-list" class="inbox-list" aria-label="Daftar kotak masuk"></ul>
+          </div>
+          <footer class="sidebar-footer"><span id="poll-status">Pembaruan otomatis · 30 detik</span><p id="refresh-status" role="status"></p><p id="retention-note"></p>
+            <div class="preferences"><label for="workspace-theme">Tema</label><select id="workspace-theme"><option value="system">Sistem</option><option value="light">Terang</option><option value="dark">Gelap</option></select><button id="notification-toggle" class="small-button" type="button" aria-pressed="false" aria-describedby="notification-status notification-help">Notifikasi</button></div>
+            <p id="notification-status" role="status"></p><p id="notification-help">Notifikasi hanya saat aplikasi terbuka dan tab terlihat; diperiksa setiap 30 detik. Tidak berjalan di latar belakang.</p>
+          </footer>
+        </aside>
+
+        <section id="messages-pane" class="messages-pane pane" aria-labelledby="messages-title">
+          <header class="pane-heading">
+            <button id="back-inboxes" class="mobile-back quiet" type="button" aria-label="Kembali ke kotak masuk">Kembali ke kotak masuk</button>
+            <div class="section-heading"><h2 id="messages-title" tabindex="-1">Pesan masuk</h2><button id="refresh-messages" class="quiet compact" type="button" aria-label="Segarkan pesan" disabled>↻</button></div>
+            <p id="selected-address" class="selected-address">Pilih kotak masuk</p>
+            <div id="inbox-actions" class="toolbar" hidden>
+              <button id="copy-address" class="small-button" type="button">Salin alamat</button>
+              <button id="delete-inbox" class="quiet danger-text small-button" type="button">Hapus kotak masuk</button>
+            </div>
+            <search><form id="message-search-form" hidden><label class="search-label" for="message-search">Cari pesan di kotak masuk ini</label><input id="message-search" type="search" maxlength="200" placeholder="Pengirim, subjek, atau isi…" autocomplete="off" /><button class="small-button" type="submit">Cari pesan</button></form></search>
+          </header>
+          <div class="messages-scroll">
+            <div id="messages-state" class="state" role="status">Pilih alamat di sebelah kiri untuk melihat pesan.</div>
+            <button id="retry-messages" class="retry" type="button" hidden>Coba lagi pesan</button>
+            <ul id="message-list" class="message-list" aria-label="Daftar pesan"></ul>
+            <button id="load-more" class="load-more" type="button" hidden>Muat pesan lainnya</button>
+          </div>
+          <footer class="pane-footer">Hanya menerima pesan <span aria-hidden="true">·</span> Tampilan teks aman</footer>
+        </section>
+
+        <section id="reader" class="reader pane" aria-label="Pembaca pesan">
+          <header class="reader-toolbar">
+            <button id="back-messages" class="mobile-back quiet" type="button" aria-label="Kembali ke pesan">Kembali ke pesan</button>
+            <span class="eyebrow reader-label">PEMBACA PESAN</span>
+            <button id="delete-message" class="quiet danger-text" type="button" hidden>Hapus pesan</button>
+          </header>
+          <div id="reader-empty" class="reader-empty"><div class="empty-envelope" aria-hidden="true">✉</div><h2>Ruang untuk kabar baru</h2><p>Pilih pesan untuk membacanya di sini.</p><span class="pill">Email ditampilkan sebagai teks</span></div>
+          <div id="reader-state" class="state" role="status" hidden></div>
+          <button id="retry-reader" class="retry" type="button" hidden>Coba lagi isi pesan</button>
+          <article id="message-detail" class="message-detail" hidden>
+            <div class="reader-actions"><button id="toggle-read" class="small-button" type="button">Tandai dibaca</button><p id="read-error" class="error" role="alert" hidden></p></div>
+            <header class="message-heading"><span class="eyebrow">PESAN MASUK</span><h2 id="message-subject" tabindex="-1">Pesan</h2><dl class="message-meta"><div><dt>Dari</dt><dd id="message-from"></dd></div><div><dt>Kepada</dt><dd id="message-to"></dd></div><div><dt>Diterima</dt><dd id="message-received"></dd></div><div><dt>Kedaluwarsa</dt><dd id="message-expires"></dd></div></dl></header>
+            <section id="otp-section" class="otp-section" aria-label="Kandidat kode OTP" hidden><p class="small">Kandidat kode OTP — periksa pesan sebelum menggunakan.</p><div id="otp-candidates" class="toolbar"></div></section>
+            <div id="message-body" class="message-body" dir="auto"></div>
+          </article>
+        </section>
+      </main>
+      <a class="credit workspace-credit" href="https://github.com/aplatogg" target="_blank" rel="noopener noreferrer">Created by github.com/aplatogg</a>
+    </div>
+
+    <dialog id="create-dialog" aria-labelledby="create-title" aria-describedby="create-description">
+      <form id="create-form" novalidate>
+        <span class="eyebrow">ALAMAT BARU</span><h2 id="create-title">Satu alamat, banyak kemungkinan.</h2>
+        <p id="create-description" class="muted">Pilih nama sendiri atau kosongkan untuk membuat alamat acak.</p>
+        <label for="local-part">Nama alamat (opsional)</label>
+        <div class="address-field"><input id="local-part" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64" aria-describedby="local-help create-error" /><span id="create-domain"></span></div>
+        <p id="local-help" class="small muted">1–32 karakter: huruf a–z, angka, tanda hubung, atau garis bawah. Awali dengan huruf atau angka.</p>
+        <p id="create-error" class="error" role="alert" hidden></p>
+        <div class="dialog-actions"><button id="cancel-create" type="button">Batal</button><button id="create-submit" class="primary" type="submit">Buat alamat</button></div>
+      </form>
+    </dialog>
+    <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description">
+      <h2 id="confirm-title">Hapus item ini?</h2><p id="confirm-description" class="muted"></p><p id="delete-error" class="error" role="alert" hidden></p>
+      <div class="dialog-actions"><button id="cancel-delete" type="button" autofocus>Batal</button><button id="confirm-delete" class="destructive" type="button">Ya, hapus</button></div>
+    </dialog>
+    <dialog id="copy-dialog" aria-labelledby="copy-title">
+      <h2 id="copy-title">Salin alamat</h2><p class="muted">Penyalinan otomatis tidak tersedia. Tekan Ctrl+C, ⌘C, atau sentuh lama untuk menyalin.</p>
+      <label id="copy-label" for="copy-value">Alamat untuk disalin</label><input id="copy-value" readonly />
+      <div class="dialog-actions"><button id="close-copy" type="button">Selesai</button></div>
+    </dialog>
+    <dialog id="password-dialog" aria-labelledby="password-title" aria-describedby="password-help">
+      <form id="password-form" novalidate>
+        <span class="eyebrow">AKUN ANDA</span><h2 id="password-title">Ubah kata sandi</h2>
+        <p id="password-help" class="muted">Gunakan 5–1024 karakter, berbeda dari kata sandi saat ini. Setelah berhasil, semua sesi akun Anda akan keluar. Masuk kembali ke Plato-Tempmail dengan kata sandi baru.</p>
+        <label for="current-password">Kata sandi saat ini</label><input id="current-password" type="password" autocomplete="current-password" maxlength="1024" required />
+        <label for="new-password">Kata sandi baru</label><input id="new-password" type="password" autocomplete="new-password" maxlength="1024" required />
+        <label for="confirm-password">Konfirmasi kata sandi baru</label><input id="confirm-password" type="password" autocomplete="new-password" maxlength="1024" required />
+        <p id="password-error" class="error" role="alert" hidden></p><p id="password-retry" class="small" role="status" hidden></p>
+        <div class="dialog-actions"><button id="cancel-password" type="button">Batal</button><button id="password-submit" class="primary" type="submit">Simpan kata sandi</button></div>
+      </form>
+    </dialog>
+    <dialog id="users-dialog" aria-labelledby="users-title" aria-describedby="users-help">
+      <div class="section-heading"><h2 id="users-title">Kelola pengguna</h2><button id="close-users" type="button">Tutup</button></div>
+      <p id="users-help" class="muted">Maksimal 100 akun tambahan. Owner dapat membaca inbox pengguna lain; perubahan inbox hanya oleh pemiliknya. Admin hanya dapat mengelola akun tanpa peran Admin/Owner dan menetapkan Member/Dev. Owner utama dilindungi. Jika ditutup saat menyimpan, periksa hasil sebelum mencoba lagi.</p>
+      <p id="users-count" class="small"></p><p id="users-status" role="status"></p>
+      <p id="users-error" class="error" role="alert" hidden></p><button id="retry-users" class="retry" type="button" hidden>Coba lagi pengguna</button>
+      <ul id="users-list" class="users-list" aria-label="Daftar pengguna"></ul>
+      <form id="user-create-form" novalidate>
+        <h3>Tambah pengguna</h3>
+        <label for="user-username">Nama akun anggota (wajib)</label><input id="user-username" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64" required aria-describedby="user-username-help user-create-error" />
+        <p id="user-username-help" class="small">3–32 karakter: a–z, angka, - atau _. Awali huruf atau angka. Nama owner dicadangkan.</p>
+        <label for="user-password">Kata sandi anggota (wajib)</label><input id="user-password" type="password" autocomplete="new-password" maxlength="1024" required aria-describedby="user-password-help user-create-error" />
+        <p id="user-password-help" class="small">5–1024 karakter, tidak boleh hanya spasi.</p>
+        <fieldset id="create-role-fieldset" class="role-fieldset" aria-describedby="create-roles-help user-create-error"><legend>Peran pengguna baru</legend><p id="create-roles-help" class="small">Pilih minimal satu peran. Hak akses dari setiap peran digabungkan. Member: email sendiri; Dev: panel teknis; Admin: akun Member/Dev; Owner: seluruh peran dan inspeksi inbox hanya baca.</p><div id="create-roles" class="role-options"></div></fieldset>
+        <p id="user-create-error" class="error" role="alert" hidden></p><p id="user-create-status" class="success" role="status"></p>
+        <div class="dialog-actions"><button id="user-create-submit" class="primary" type="submit">Buat pengguna</button></div>
+      </form>
+    </dialog>
+    <dialog id="reset-user-dialog" aria-labelledby="reset-user-title" aria-describedby="reset-user-help">
+      <form id="reset-user-form" novalidate>
+        <h2 id="reset-user-title">Reset kata sandi anggota</h2><p id="reset-user-help" class="muted"></p>
+        <label for="reset-user-password">Kata sandi pengganti (wajib)</label><input id="reset-user-password" type="password" autocomplete="new-password" maxlength="1024" required aria-describedby="reset-password-help reset-user-error" />
+        <p id="reset-password-help" class="small">5–1024 karakter, tidak boleh hanya spasi.</p>
+        <p id="reset-user-error" class="error" role="alert" hidden></p>
+        <div class="dialog-actions"><button id="close-reset-user" type="button">Batal</button><button id="reset-user-submit" class="primary" type="submit">Reset kata sandi</button></div>
+      </form>
+    </dialog>
+    <dialog id="role-dialog" aria-labelledby="role-title" aria-describedby="role-help">
+      <form id="role-form" novalidate>
+        <h2 id="role-title">Ubah peran pengguna</h2><p id="role-help" class="muted"></p>
+        <fieldset id="edit-role-fieldset" class="role-fieldset" aria-describedby="role-error"><legend>Peran pengguna</legend><div id="edit-roles" class="role-options"></div></fieldset>
+        <p id="role-error" class="error" role="alert" hidden></p>
+        <div class="dialog-actions"><button id="close-role" type="button">Batal</button><button id="role-submit" class="primary" type="submit">Simpan peran</button></div>
+      </form>
+    </dialog>
+    <dialog id="diagnostics-dialog" aria-labelledby="diagnostics-title" aria-describedby="diagnostics-help">
+      <div class="section-heading"><h2 id="diagnostics-title">Panel teknis</h2><button id="close-diagnostics" type="button">Tutup</button></div>
+      <p id="diagnostics-help" class="muted">Hanya baca. Jumlah baris tersimpan, bukan status pengiriman email. Tanpa isi email, identitas pengguna, kredensial, atau log.</p>
+      <p id="diagnostics-status" role="status"></p><p id="diagnostics-error" class="error" role="alert" hidden></p>
+      <dl id="diagnostics-data" class="message-meta" aria-live="polite"></dl>
+      <div class="dialog-actions"><button id="refresh-diagnostics" type="button">Segarkan diagnostik</button></div>
+    </dialog>
+    <div id="notice" class="notice" role="status" hidden></div>
+  </body>
+</html>
