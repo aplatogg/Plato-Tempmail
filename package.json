@@ -19,7 +19,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:integration": "playwright test -c playwright.integration.config.ts",
-    "test:tooling": "node --test tests/tooling.test.mjs tests/secrets.test.mjs",
+    "test:tooling": "node --test tests/tooling.test.mjs tests/secrets.test.mjs tests/client-guards.test.mjs",
     "preflight": "node scripts/preflight.mjs --config wrangler.local.jsonc",
     "build": "wrangler deploy --dry-run --outdir dist --config wrangler.local.jsonc",
     "deploy": "npm run preflight && wrangler deploy --config wrangler.local.jsonc",

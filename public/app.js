@@ -2045,6 +2045,34 @@ function playNotificationSound() {
   }
 }
 
+// The page CSP is connect-src 'self', so a data: URL cannot be fetched and a
+// custom tone would never decode. Parse the data URL ourselves instead.
+function bytesFromDataUrl(dataUrl) {
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0) return null;
+  const header = dataUrl.slice(0, comma);
+  const payload = dataUrl.slice(comma + 1);
+  let binary;
+  try {
+    binary = header.includes(";base64") ? atob(payload) : decodeURIComponent(payload);
+  } catch {
+    return null;
+  }
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+// Chunked because spreading a 400 KB array into String.fromCharCode overflows the stack.
+function base64FromBytes(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(index, index + chunk));
+  }
+  return btoa(binary);
+}
+
 async function decodeCustomSound(dataUrl) {
   if (!dataUrl) {
     customSoundBuffer = null;
@@ -2052,9 +2080,14 @@ async function decodeCustomSound(dataUrl) {
   }
   unlockAudio();
   if (!audioContext) return false;
+  const bytes = bytesFromDataUrl(dataUrl);
+  if (!bytes || !bytes.length) {
+    customSoundBuffer = null;
+    return false;
+  }
   try {
-    const bytes = await (await fetch(dataUrl)).arrayBuffer();
-    customSoundBuffer = await audioContext.decodeAudioData(bytes);
+    // decodeAudioData detaches its input, so hand it a private copy.
+    customSoundBuffer = await audioContext.decodeAudioData(bytes.buffer.slice(0));
     return true;
   } catch {
     customSoundBuffer = null;
@@ -3161,35 +3194,45 @@ async function handleSoundFile(file) {
     setError("sound-error", "File terlalu besar. Maksimum 400 KB.");
     return;
   }
-  const reader = new FileReader();
-  reader.onload = async () => {
-    const dataUrl = typeof reader.result === "string" ? reader.result : "";
-    if (!dataUrl) {
-      setError("sound-error", "File tidak bisa dibaca.");
-      return;
-    }
-    const ok = await decodeCustomSound(dataUrl);
-    if (!ok) {
-      setError("sound-error", "Format audio tidak didukung browser ini. Coba MP3, WAV atau OGG.");
-      return;
-    }
-    try {
-      preference("sound-custom", dataUrl);
-    } catch {
-      setError("sound-error", "Nada tersimpan gagal (penyimpanan penuh). Pakai file yang lebih kecil.");
-      return;
-    }
-    preference("sound-tone", "kustom");
-    soundTone = "kustom";
-    setError("sound-error", "");
-    renderSound();
-    playNotificationSound();
-    announce("Nada kustom disimpan di perangkat ini.");
-  };
-  reader.onerror = () => setError("sound-error", "File tidak bisa dibaca.");
-  reader.readAsDataURL(file);
+  let bytes;
+  try {
+    bytes = new Uint8Array(await file.arrayBuffer());
+  } catch {
+    setError("sound-error", "File tidak bisa dibaca.");
+    return;
+  }
+  if (!bytes.length) {
+    setError("sound-error", "File kosong.");
+    return;
+  }
+  unlockAudio();
+  if (!audioContext) {
+    setError("sound-error", "Browser ini tidak menyediakan Web Audio.");
+    return;
+  }
+  // Decode from the bytes we already hold: no object URL, no data: fetch.
+  let buffer;
+  try {
+    buffer = await audioContext.decodeAudioData(bytes.buffer.slice(0));
+  } catch {
+    setError("sound-error", "Format audio tidak didukung. Coba MP3, WAV, OGG atau M4A.");
+    return;
+  }
+  const dataUrl = `data:${file.type || "audio/mpeg"};base64,${base64FromBytes(bytes)}`;
+  try {
+    preference("sound-custom", dataUrl);
+  } catch {
+    setError("sound-error", "Nada gagal disimpan (penyimpanan penuh). Pakai file yang lebih kecil.");
+    return;
+  }
+  customSoundBuffer = buffer;
+  preference("sound-tone", "kustom");
+  soundTone = "kustom";
+  setError("sound-error", "");
+  renderSound();
+  playNotificationSound();
+  announce(`Nada kustom dipakai (${Math.round(buffer.duration * 10) / 10} detik).`);
 }
-
 $("sound-settings").addEventListener("click", openSoundSettings);
 $("close-sound").addEventListener("click", () => $("sound-dialog").close());
 $("sound-tone").addEventListener("change", (event) => void chooseSoundTone(event.target.value));
