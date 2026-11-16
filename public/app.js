@@ -431,7 +431,6 @@ function updateControls() {
   $("delete-all-messages").disabled = busy || !state.messages.length;
   $("forward-inbox").disabled = busy || !state.inbox;
   for (const button of document.querySelectorAll(".favorite")) button.disabled = busy;
-  renderRefresh();
 }
 function startSession(data, inspectedUser = null) {
   if (!data?.user?.username || typeof data.mailDomain !== "string")
@@ -473,7 +472,7 @@ function startSession(data, inspectedUser = null) {
   updateControls();
   startPolling();
   clearInterval(statusTimer);
-  statusTimer = setInterval(renderRefresh, 1000);
+  statusTimer = null;
   renderNotifications();
   void loadInboxes();
 }
@@ -1154,8 +1153,6 @@ function startPolling() {
   const visible = document.visibilityState === "visible";
   // A temporary inbox is checked every 3s while the tab is visible, so an arrival
   // reaches the sound and the list almost immediately instead of up to 30s later.
-  text("poll-status", visible ? "Pembaruan otomatis - 3 detik" : "Pembaruan dijeda");
-  renderRefresh();
   if (!state.session || !visible) return;
   pollTimer = setInterval(() => {
     if (
@@ -1738,7 +1735,6 @@ async function changePassword(event) {
 function beginRefresh(kind) {
   const ticket = Symbol(kind);
   refresh.set(kind, { ...refresh.get(kind), ticket, pending: true });
-  renderRefresh();
   return ticket;
 }
 function endRefresh(kind, ticket, success) {
@@ -1747,34 +1743,10 @@ function endRefresh(kind, ticket, success) {
   item.pending = false;
   item.failed = !success;
   if (success) item.lastSuccess = Date.now();
-  renderRefresh();
 }
 function cancelRefresh(kind, ticket) {
   const item = refresh.get(kind);
   if (item?.ticket === ticket) item.pending = false;
-  renderRefresh();
-}
-function renderRefresh() {
-  if (!state.session) {
-    text("refresh-status", "");
-    return;
-  }
-  const items = [...refresh.values()];
-  const times = items.map((item) => item.lastSuccess).filter((time) => time !== undefined);
-  const age = times.length
-    ? `Terakhir berhasil ${Math.max(0, Math.floor((Date.now() - Math.min(...times)) / 1000))} detik lalu.`
-    : "Belum ada pembaruan berhasil.";
-  const status =
-    document.visibilityState !== "visible"
-      ? "Dijeda · tab tidak terlihat. "
-      : !navigator.onLine
-        ? "Offline. "
-        : items.some((item) => item.pending)
-          ? "Memuat pembaruan… "
-          : items.some((item) => item.failed)
-            ? "Gagal memperbarui. "
-            : "";
-  text("refresh-status", `${status}${age}`);
 }
 function searchMessages(event) {
   event?.preventDefault();
@@ -2940,8 +2912,7 @@ for (const id of ["login-theme", "workspace-theme"])
     applyTheme();
   });
 systemTheme.addEventListener("change", applyTheme);
-window.addEventListener("online", renderRefresh);
-window.addEventListener("offline", renderRefresh);
+
 window.addEventListener("storage", (event) => {
   if (event.key === authSignalKey && event.newValue) receiveAuthChange(event.newValue);
   if (event.key === "plato.theme") {
