@@ -46,12 +46,17 @@ export function readConfig(env: Env): AppConfig {
     return configurationError();
   }
   if (!/^(?:[1-9]|[12][0-9]|30)$/.test(env.MESSAGE_RETENTION_DAYS)) return configurationError();
+  // Deployment-wide inbox ceiling. Per-plan quotas live in roles.ts; this is the
+  // only global bound, and it exists to keep D1 from growing without limit.
+  const rawMax = env.MAX_TOTAL_INBOXES ?? "10000";
+  if (!/^[1-9][0-9]{0,5}$/.test(rawMax)) return configurationError();
   return {
     origin: url.origin,
     secure,
     username: env.ADMIN_USERNAME,
     mailDomain: domain,
     retentionDays: Number(env.MESSAGE_RETENTION_DAYS),
+    maxInboxes: Number(rawMax),
   };
 }
 

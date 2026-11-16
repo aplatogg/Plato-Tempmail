@@ -175,7 +175,7 @@ export async function createInboxFor(c: Context<AppBindings>, custom?: string): 
   const [authorized, inserted, , , conflict] = await c.env.DB.batch([
     c.env.DB.prepare(`SELECT 1 WHERE ${fresh.sql}`).bind(...fresh.values),
     c.env.DB.prepare(`INSERT INTO inboxes (id,address,created_at)
-      SELECT ?,?,? WHERE (SELECT COUNT(*) FROM inboxes) < 100
+      SELECT ?,?,? WHERE (SELECT COUNT(*) FROM inboxes) < ?
         AND NOT EXISTS (SELECT 1 FROM address_claims WHERE address = ? AND user_id <> ?)
         ${quotaSql}
         AND (${fresh.sql})
@@ -183,6 +183,7 @@ export async function createInboxFor(c: Context<AppBindings>, custom?: string): 
       id,
       address,
       createdAt,
+      c.get("config").maxInboxes,
       address,
       userId,
       ...quotaValues,
@@ -212,7 +213,7 @@ export async function createInboxFor(c: Context<AppBindings>, custom?: string): 
         ? "Email sudah digunakan. Silakan gunakan email lain."
         : quota
           ? "Batas kuota inbox akun ini sudah tercapai."
-          : "Maksimal 100 inbox. Hapus inbox lama terlebih dahulu.",
+          : `Batas ${c.get("config").maxInboxes} inbox untuk deployment ini tercapai.`,
     );
   }
   return c.json(

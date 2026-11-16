@@ -144,6 +144,28 @@ describe("private mailbox API", () => {
     expect(results.filter((r) => r.status === 409)).toHaveLength(4);
     expect(await bindings.DB.prepare("SELECT COUNT(*) AS n FROM inboxes").first("n")).toBe(100);
   });
+  it("honours a configured deployment-wide inbox cap", async () => {
+    const custom = { ...bindings, MAX_TOTAL_INBOXES: "2" };
+    const mk = async (localPart: string) => {
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(
+        new Request(origin + "/api/inboxes", {
+          method: "POST",
+          headers: { origin, cookie, "content-type": "application/json" },
+          body: JSON.stringify({ localPart }),
+        }),
+        custom,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+      return res;
+    };
+    expect((await mk("one")).status).toBe(201);
+    expect((await mk("two")).status).toBe(201);
+    const third = await mk("three");
+    expect(third.status).toBe(409);
+    expect(await third.json()).toMatchObject({ error: { code: "INBOX_LIMIT" } });
+  });
   it("paginates tied timestamps without duplication and omits bodies from lists", async () => {
     const inbox = await create();
     await seed(inbox.id, 61);

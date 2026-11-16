@@ -6,6 +6,7 @@ export interface Env {
   MAIL_DOMAIN: string;
   ADMIN_USERNAME: string;
   MESSAGE_RETENTION_DAYS: string;
+  MAX_TOTAL_INBOXES?: string;
   AUTH_PASSWORD_HASH?: string;
   RESET_EMAIL?: SendEmail;
   RESET_EMAIL_TO?: string;
@@ -17,6 +18,7 @@ export interface AppConfig {
   username: string;
   mailDomain: string;
   retentionDays: number;
+  maxInboxes: number;
 }
 
 export interface AuthConfig {
