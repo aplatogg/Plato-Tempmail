@@ -5,6 +5,8 @@ import { ApiError, configurationError, hex, readJson, sha256 } from "./security"
 import type { AppBindings, AppConfig, AuthConfig, Env, Principal } from "./types";
 
 const SESSION_SECONDS = 86_400;
+// "Trust this device": a long-lived session for a machine the operator holds.
+const TRUSTED_SESSION_SECONDS = 30 * 86_400;
 const RATE_SECONDS = 900;
 
 type ThrottlePurpose = "login" | "password" | "reset";
@@ -262,7 +264,8 @@ export async function login(c: Context<AppBindings>): Promise<Response> {
   // Allow JSON's six-byte escapes for all 1024 password and 64 username code units.
   const body = await readJson(c.req.raw, 8192);
   if (
-    Object.keys(body).some((key) => key !== "username" && key !== "password") ||
+    Object.keys(body).some((key) => key !== "username" && key !== "password" && key !== "trustDevice") ||
+    (body.trustDevice !== undefined && typeof body.trustDevice !== "boolean") ||
     typeof body.username !== "string" ||
     body.username.length < 1 ||
     body.username.length > 64 ||
@@ -277,6 +280,7 @@ export async function login(c: Context<AppBindings>): Promise<Response> {
     );
   }
   const now = Math.floor(Date.now() / 1000);
+  const sessionSeconds = body.trustDevice === true ? TRUSTED_SESSION_SECONDS : SESSION_SECONDS;
   await throttle(c, now);
   const config = c.get("config");
   const ownerAuth = c.get("auth");
@@ -324,7 +328,7 @@ export async function login(c: Context<AppBindings>): Promise<Response> {
       tokenHash,
       auth.credentialVersion,
       now,
-      now + SESSION_SECONDS,
+      now + sessionSeconds,
       userAgent,
       clientIp,
       ...values,
@@ -348,7 +352,7 @@ export async function login(c: Context<AppBindings>): Promise<Response> {
   const results = await c.env.DB.batch(statements);
   if (!results[mappingResultIndex]?.results.length) credentialConflict();
   // Issue the cookie only after the D1 transaction commits; no client token can outlive a failed write.
-  c.header("Set-Cookie", cookie(config, token, SESSION_SECONDS));
+  c.header("Set-Cookie", cookie(config, token, sessionSeconds));
   return c.json(publicSession(config, user));
 }
 

@@ -585,7 +585,12 @@ async function login(event) {
     startSession(
       await api("/auth/login", {
         method: "POST",
-        body: { username: $("username").value.trim(), password: $("password").value },
+        body: {
+          username: $("username").value.trim(),
+          password: $("password").value,
+          // Explicit: the server treats a missing flag as a normal 24-hour session.
+          trustDevice: $("trust-device").checked === true,
+        },
         slot: "auth",
       }),
     );

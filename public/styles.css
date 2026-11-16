@@ -341,6 +341,7 @@ a {
   width: 24px;
   height: 24px;
   flex: 0 0 auto;
+  color: currentColor;
 }
 .brand-wordmark {
   display: inline-flex;
@@ -1949,3 +1950,20 @@ dialog p {
 .api-name { font-size: var(--fs-body); font-weight: 600; overflow-wrap: anywhere; }
 .api-token { margin-top: 12px; }
 .api-token input { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: var(--fs-small); }
+
+/* Login: "trust this device" keeps the session for 30 days. */
+.trust-device {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+
+.trust-device input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}

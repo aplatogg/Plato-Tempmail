@@ -7,8 +7,9 @@
     <meta name="referrer" content="no-referrer" />
     <meta name="theme-color" content="#0b0e11" />
     <title>Haldgoff Mail — Kotak masuk privat</title>
-    <link rel="icon" href="/favicon.png" type="image/png" sizes="64x64" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="/favicon.png" type="image/png" sizes="64x64" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />    <link rel="stylesheet" href="/styles.css" />
     <script src="/app.js" type="module"></script>
   </head>
@@ -19,7 +20,7 @@
     <div id="workspace" class="workspace" data-view="inboxes" hidden>
       <header class="app-header">
         <h1 class="brand">
-          <img class="brand-mark" src="/logo-mark.png" alt="" width="22" height="22" decoding="async" /><span class="brand-wordmark">haldgoff</span>
+          <svg class="brand-mark" viewBox="8.1 11.5 47.25 41" width="24" height="24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="miter" transform="translate(2.6 0)"><path d="M9.5 15.5V48.5M21 15.5V48.5M9.5 32H21"/><path d="M48.75 20.31A13.5 13.5 0 1 0 48.75 43.69V32H42"/></g></svg><span class="brand-wordmark">haldgoff</span>
           <span class="brand-product">Mail</span>
         </h1>
         <div class="header-account"><span id="account-name" class="account-name"></span><span id="account-roles" class="role-badges"></span><button id="manage-users" class="quiet" type="button" hidden>Kelola pengguna</button><button id="open-diagnostics" class="quiet" type="button" hidden>Panel teknis</button><button id="open-audit" class="quiet" type="button" hidden>Riwayat</button><button id="open-api" class="quiet" type="button">API</button><button id="account-settings" class="quiet" type="button">Akun</button><button id="logout" class="quiet" type="button">Keluar</button></div>
@@ -229,7 +230,7 @@
         <div class="login-card">
           <div class="login-intro">
             <div class="brand brand-login" role="img" aria-label="Haldgoff Mail">
-              <img class="brand-mark" src="/logo-mark.png" alt="" width="22" height="22" decoding="async" /><span class="brand-wordmark">haldgoff</span>
+              <svg class="brand-mark" viewBox="8.1 11.5 47.25 41" width="24" height="24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="miter" transform="translate(2.6 0)"><path d="M9.5 15.5V48.5M21 15.5V48.5M9.5 32H21"/><path d="M48.75 20.31A13.5 13.5 0 1 0 48.75 43.69V32H42"/></g></svg><span class="brand-wordmark">haldgoff</span>
               <span class="brand-product">Mail</span>
             </div>
             <h1 id="login-title">Masuk</h1>
@@ -250,6 +251,7 @@
             <p id="login-error" class="error" role="alert" hidden></p>
             <p id="login-success" class="success" role="status" hidden></p>
             <p id="login-retry" class="small" role="status" hidden></p>
+            <label class="trust-device"><input id="trust-device" type="checkbox" checked /> <span>Percayai perangkat ini 30 hari</span></label>
             <button id="login-submit" class="primary full" type="submit">Masuk</button>
             <button id="forgot-open" class="quiet full" type="button">Lupa kata sandi?</button>
             <button id="retry-session" class="full" type="button" hidden>Coba lagi koneksi</button>

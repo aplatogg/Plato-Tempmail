@@ -100,6 +100,27 @@ describe("authentication contract", () => {
     expect(cookie).not.toMatch(/Domain=/i);
   });
 
+  it("extends the session to 30 days when the device is trusted", async () => {
+    const trusted = await login({ ...credentials, trustDevice: true });
+    expect(trusted.status).toBe(200);
+    const cookie = trusted.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("Max-Age=2592000");
+    expect(cookie).toContain("HttpOnly");
+    const row = await bindings.DB.prepare(
+      "SELECT expires_at - created_at AS span FROM sessions ORDER BY created_at DESC LIMIT 1",
+    ).first<{ span: number }>();
+    expect(row?.span).toBe(30 * 86_400);
+  });
+
+  it("keeps the default session when no trust flag is sent", async () => {
+    const response = await login();
+    expect(response.headers.get("set-cookie") ?? "").toContain("Max-Age=86400");
+  });
+
+  it("rejects a non-boolean trust flag", async () => {
+    const response = await login({ ...credentials, trustDevice: "yes" });
+    expect(response.status).toBe(400);
+  });
   it("stores only the token digest, never the cookie token or password", async () => {
     const cookie = await sessionCookie();
     const token = cookie.slice(cookie.indexOf("=") + 1);

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%" role="img" aria-label="HG">
+  <rect width="64" height="64" rx="14" fill="#131416"/>
+  <g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="butt" stroke-linejoin="miter" transform="translate(32 32) scale(.74) translate(-32 -32)">
+    <g transform="translate(2.6 0)"><path d="M9.5 15.5V48.5M21 15.5V48.5M9.5 32H21"/><path d="M48.75 20.31A13.5 13.5 0 1 0 48.75 43.69V32H42"/></g>
+  </g>
+</svg>
