@@ -88,13 +88,28 @@ inboxRoutes.post("/", async (c) => {
     throw new ApiError(400, "INVALID_INPUT", "Inbox hanya dapat dibuat untuk pengguna sendiri.");
   }
   const body = await readJson(c.req.raw);
+  // `localPart` is canonical. `name` and `address` are accepted aliases because
+  // automation clients reach for them first; `address` may carry a full
+  // `name@domain` and the domain is dropped when it matches this deployment.
+  const aliases = ["localPart", "name", "address"];
   if (
-    Object.keys(body).some((key) => key !== "localPart") ||
-    (body.localPart !== undefined && typeof body.localPart !== "string")
+    Object.keys(body).some((key) => !aliases.includes(key)) ||
+    aliases.some((key) => body[key] !== undefined && typeof body[key] !== "string")
   ) {
-    throw new ApiError(400, "INVALID_INPUT", "Nama inbox harus berupa teks.");
+    throw new ApiError(
+      400,
+      "INVALID_INPUT",
+      'Kirim {"localPart":"nama"} (alias: "name", atau "address" lengkap) — 1–32 karakter a-z 0-9 . _ - .',
+    );
   }
-  const custom = body.localPart as string | undefined;
+  let custom = (body.localPart ?? body.name ?? body.address) as string | undefined;
+  if (custom && custom.includes("@")) {
+    const [atLocal, atDomain] = custom.split("@");
+    if (atDomain.toLowerCase() !== c.get("config").mailDomain.toLowerCase()) {
+      throw new ApiError(400, "INVALID_DOMAIN", `Domain harus @${c.get("config").mailDomain}.`);
+    }
+    custom = atLocal;
+  }
   return createInboxFor(c, custom);
 });
 

@@ -19,8 +19,8 @@ Format kunci: `hvk_<12 hex>_<48 hex>` (65 karakter). Yang disimpan server cuma S
 |---|---|---|
 | GET | `/me` | identitas pemilik kunci + `mailDomain` + `retentionDays` |
 | GET | `/inboxes` | daftar inbox milik akun |
-| POST | `/inboxes` | buat 1 inbox, body `{"localPart": "opsional"}` |
-| POST | `/inboxes/bulk` | buat banyak, body `{"count": 10, "prefix": "run"}` (count 1–50) |
+| POST | `/inboxes` | buat 1 inbox, body `{"localPart": "..."}` (alias `name`, atau `address` lengkap) |
+| POST | `/inboxes/bulk` | buat banyak: `{"localParts": ["a","b"]}` **atau** `{"count": 10, "prefix": "budi"}` (maks 50) |
 | PATCH | `/inboxes/:id` | `{"favorite": true}` |
 | DELETE | `/inboxes/:id` | hapus inbox |
 | GET | `/inboxes/:id/messages` | daftar pesan; `?unread=1`, `?cursor=...` |
@@ -38,10 +38,17 @@ export HALDGOFF_KEY="hvk_xxxxxxxxxxxx_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 curl -s -H "Authorization: Bearer $HALDGOFF_KEY" \
   https://mail.haldgoff.com/api/v1/me
 
-# buat 5 inbox sekaligus
+# alamat persis, tanpa akhiran acak
 curl -s -X POST -H "Authorization: Bearer $HALDGOFF_KEY" \
-  -H "Content-Type: application/json" -d '{"count":5,"prefix":"run"}' \
+  -H "Content-Type: application/json" \
+  -d '{"localParts":["titikwiduri54","kurirpaket55"]}' \
   https://mail.haldgoff.com/api/v1/inboxes/bulk
+
+# dibuatkan otomatis: nama ala manusia (kata + angka), atau prefix + angka
+curl -s -X POST -H "Authorization: Bearer $HALDGOFF_KEY" \
+  -H "Content-Type: application/json" -d '{"count":5}' \
+  https://mail.haldgoff.com/api/v1/inboxes/bulk
+# -> titikwiduri54@…, kurirpaket55@…, umarsantoso24@…
 
 # baca pesan belum dibaca
 curl -s -H "Authorization: Bearer $HALDGOFF_KEY" \
@@ -52,7 +59,17 @@ curl -s -H "Authorization: Bearer $HALDGOFF_KEY" \
   https://mail.haldgoff.com/api/v1/messages/<message-id>
 ```
 
-`/inboxes/bulk` mengembalikan `{created: [{inbox:{id,address}}...], failed: [{status,error}]}`.
+`/inboxes/bulk` mengembalikan `{created: [{inbox:{id,address}}...], failed: [{address,status,error}]}`.
+
+Dua mode, tidak boleh dicampur:
+
+- **`localParts`** — daftar alamat persis (1–50). Tidak ada akhiran yang ditambahkan.
+  Kalau satu alamat sudah dipakai, item itu masuk `failed` dan tidak diganti nama.
+- **`count`** (+ `prefix` opsional) — server membuat nama. Tanpa `prefix` hasilnya
+  nama ala manusia: dua kata + angka (`titikwiduri54`). Dengan `prefix`, hasilnya
+  `prefix` + 2–3 angka (`budi12`). **Tidak pernah** memakai `-`, `_`, atau kode hex.
+- Semua nama tetap divalidasi: 1–32 karakter `a-z 0-9 . _ -`, nama reserved hanya
+  untuk Celestial.
 Kalau kuota atau batas 100 inbox kena, loop berhenti lebih awal (403/409).
 
 ## Aturan yang berlaku (sama dengan aplikasi)

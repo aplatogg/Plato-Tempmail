@@ -105,7 +105,65 @@ describe("api keys", () => {
     const batch = (await bulk.json()) as { created: { inbox: { address: string } }[]; failed: unknown[] };
     expect(batch.created).toHaveLength(3);
     expect(batch.failed).toHaveLength(0);
-    for (const item of batch.created) expect(item.inbox.address).toMatch(/^run-[0-9a-f]{6}@example\.com$/);
+    // A prefix is the caller's text; the server only appends digits. No dash,
+    // no underscore, no hex code.
+    for (const item of batch.created) expect(item.inbox.address).toMatch(/^run\d{2,3}@example\.com$/);
+  });
+
+  it("generates human-shaped addresses when no prefix is given", async () => {
+    const { token } = await mintKey();
+    const bulk = await bot("/api/v1/inboxes/bulk", "POST", { count: 5 }, token);
+    expect(bulk.status).toBe(201);
+    const batch = (await bulk.json()) as { created: { inbox: { address: string } }[] };
+    expect(batch.created).toHaveLength(5);
+    const seen = new Set<string>();
+    for (const item of batch.created) {
+      const local = item.inbox.address.split("@")[0];
+      expect(local).toMatch(/^[a-z]+\d{1,2}$/); // letters then a number
+      expect(local).not.toMatch(/[-_]/);
+      seen.add(local);
+    }
+    expect(seen.size).toBe(5);
+  });
+
+  it("creates exactly the requested addresses via localParts", async () => {
+    const { token } = await mintKey();
+    const wanted = ["titikwiduri54", "kurirpaket55"];
+    const bulk = await bot("/api/v1/inboxes/bulk", "POST", { localParts: wanted }, token);
+    expect(bulk.status).toBe(201);
+    const batch = (await bulk.json()) as { created: { inbox: { address: string } }[] };
+    expect(batch.created.map((item) => item.inbox.address)).toEqual([
+      "titikwiduri54@example.com",
+      "kurirpaket55@example.com",
+    ]);
+  });
+
+  it("accepts single-create aliases name and address", async () => {
+    const { token } = await mintKey();
+    const byName = await bot("/api/v1/inboxes", "POST", { name: "budi_santoso" }, token);
+    expect(byName.status).toBe(201);
+    expect(((await byName.json()) as { inbox: { address: string } }).inbox.address).toBe(
+      "budi_santoso@example.com",
+    );
+
+    const byAddress = await bot(
+      "/api/v1/inboxes",
+      "POST",
+      { address: "umarsantoso24@example.com" },
+      token,
+    );
+    expect(byAddress.status).toBe(201);
+    expect(((await byAddress.json()) as { inbox: { address: string } }).inbox.address).toBe(
+      "umarsantoso24@example.com",
+    );
+
+    const wrongDomain = await bot(
+      "/api/v1/inboxes",
+      "POST",
+      { address: "someone@other.test" },
+      token,
+    );
+    expect(wrongDomain.status).toBe(400);
   });
 
   it("reads message list and body with the key", async () => {
