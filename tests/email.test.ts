@@ -92,6 +92,22 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("MIME ingestion", () => {
+  it("stores the From display name next to the envelope address", async () => {
+    const raw =
+      'From: "Kitchen Ops" <orders@example.org>\r\nTo: ignored@example.net\r\nSubject: Name\r\nMessage-ID: <name@example.net>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nbody';
+    await receiveEmail(incoming(raw).message, bindings);
+    const row = await bindings.DB.prepare("SELECT from_address, from_name FROM messages").first();
+    expect(row).toMatchObject({ from_address: "envelope@example.net", from_name: "Kitchen Ops" });
+  });
+
+  it("leaves the display name empty for an address-only sender", async () => {
+    const raw =
+      "From: bare@example.org\r\nTo: ignored@example.net\r\nSubject: Bare\r\nMessage-ID: <bare@example.net>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nbody";
+    await receiveEmail(incoming(raw).message, bindings);
+    const row = await bindings.DB.prepare("SELECT from_name FROM messages").first();
+    expect(row).toEqual({ from_name: null });
+  });
+
   it("stores decoded mail for an existing case-normalized envelope recipient", async () => {
     const raw = mime();
     const item = incoming(raw, { to: "KNOWN@EXAMPLE.COM" });

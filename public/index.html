@@ -42,7 +42,7 @@
             <ul id="inbox-list" class="inbox-list" aria-label="Daftar kotak masuk"></ul>
           </div>
           <footer class="sidebar-footer"><span id="poll-status">Pembaruan otomatis · 30 detik</span><p id="refresh-status" role="status"></p><p id="retention-note"></p>
-            <div class="preferences"><label for="workspace-theme">Tema</label><select id="workspace-theme"><option value="system">Sistem</option><option value="light">Terang</option><option value="dark">Gelap</option></select><button id="notification-toggle" class="small-button" type="button" aria-pressed="false" aria-describedby="notification-status notification-help">Notifikasi</button><button id="sound-toggle" class="small-button" type="button" aria-pressed="true" aria-label="Suara notifikasi">Suara</button></div>
+            <div class="preferences"><label for="workspace-theme">Tema</label><select id="workspace-theme"><option value="system">Sistem</option><option value="light">Terang</option><option value="dark">Gelap</option></select><button id="notification-toggle" class="small-button" type="button" aria-pressed="false" aria-describedby="notification-status notification-help">Notifikasi</button><button id="sound-toggle" class="small-button" type="button" aria-pressed="true" aria-label="Suara notifikasi">Suara</button><button id="sound-settings" class="small-button" type="button" aria-label="Atur nada notifikasi">Nada</button></div>
             <p id="notification-status" role="status"></p><p id="notification-help">Notifikasi dan suara hanya saat aplikasi terbuka; diperiksa setiap 30 detik. Tab latar belakang tidak dijamin berbunyi.</p>
           </footer>
         </aside>
@@ -282,6 +282,27 @@
       <ul id="api-list" class="api-list" aria-label="Kunci API"></ul>
       <div class="dialog-actions"><button id="close-api" type="button">Tutup</button></div>
     </dialog>
-    <div id="notice" class="notice" role="status" hidden></div>
+    <dialog id="sound-dialog" aria-labelledby="sound-title" aria-describedby="sound-help">
+      <h2 id="sound-title">Nada notifikasi</h2>
+      <p id="sound-help" class="muted">Berbunyi begitu ada pesan masuk, selama tab ini terbuka dan suara tidak dimatikan.</p>
+      <label for="sound-tone">Nada</label>
+      <select id="sound-tone">
+        <option value="chime">Chime (dua nada)</option>
+        <option value="bell">Bell (satu nada)</option>
+        <option value="blip">Blip (pendek)</option>
+        <option value="marimba">Marimba (tiga nada)</option>
+        <option value="kustom">File sendiri…</option>
+      </select>
+      <p id="sound-custom-note" class="small" hidden>Belum ada file. Pilih audio (maks 400 KB, disimpan di perangkat ini).</p>
+      <div class="dialog-actions"><button id="sound-file-pick" class="small-button" type="button">Pilih file audio…</button></div>
+      <input id="sound-file" type="file" accept="audio/*" hidden />
+      <label for="sound-volume">Volume</label>
+      <input id="sound-volume" type="range" min="0" max="100" step="5" value="70" />
+      <p id="sound-error" class="error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button id="sound-test" class="small-button" type="button">Coba</button>
+        <button id="close-sound" type="button">Tutup</button>
+      </div>
+    </dialog>    <div id="notice" class="notice" role="status" hidden></div>
   </body>
 </html>

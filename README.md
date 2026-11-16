@@ -116,3 +116,15 @@ Voyager and Quark accounts cannot hold keys (`403 API_KEY_FORBIDDEN`).
 
 Retention is resolved from the inbox owner's role when a message arrives; the
 highest role wins on a multi-role account.
+
+## Sender names and notifications
+
+Messages store two sender fields: `from` (the envelope address) and `fromName`
+(the display name parsed from the `From` header, `null` when the sender supplied
+only an address). The list shows the name and keeps the address in the row title;
+the reader shows `Name <address>`.
+
+While a tab is open the inbox list is polled every 3 seconds, so an arrival is
+detected (and its sound played) within a few hundred milliseconds. The **Nada**
+button in the header opens the tone settings: four built-in tones, a volume slider
+and an optional custom audio file (max 400 KB) stored per device.

@@ -82,6 +82,7 @@ export async function receiveEmail(
   let subject: string;
   let html: string | null = null;
   let attachments: { name: string; type: string; size: number }[] = [];
+  let fromName: string | null = null;
   try {
     raw = await readRaw(message.raw);
     const parsed = await PostalMime.parse(raw, {
@@ -132,6 +133,8 @@ export async function receiveEmail(
     // Keep readable HTML content as inert text; fall back for empty/image-only HTML.
     body = (htmlText.trim() ? htmlText : (parsed.text ?? "")).slice(0, MAX_BODY_CHARS);
     subject = (parsed.subject ?? "").slice(0, 500);
+    // The display name from the From header. Envelope data carries only the address.
+    fromName = (parsed.from?.name ?? "").trim().slice(0, 120) || null;
     html = parsed.html ? parsed.html.slice(0, 120_000) : null;
     attachments = (parsed.attachments ?? []).slice(0, 20).map((item) => ({
       name: (item.filename ?? "lampiran").slice(0, 200),
@@ -155,8 +158,8 @@ export async function receiveEmail(
   // Voyager/Quark 7. Unmapped legacy inboxes belong to the owner (mask 8 -> 30).
   const inserted = await env.DB.prepare(
     `INSERT INTO messages
-       (id, inbox_id, from_address, subject, body, html, attachments, received_at, expires_at, raw_digest)
-     SELECT ?, i.id, ?, ?, ?, ?, ?, ?, ? + 86400 * (
+       (id, inbox_id, from_address, from_name, subject, body, html, attachments, received_at, expires_at, raw_digest)
+     SELECT ?, i.id, ?, ?, ?, ?, ?, ?, ?, ? + 86400 * (
        CASE
          WHEN (COALESCE(u.role_mask, 8) & 14) <> 0 THEN 30
          WHEN (COALESCE(u.role_mask, 8) & 32) <> 0 THEN 14
@@ -172,6 +175,7 @@ export async function receiveEmail(
     .bind(
       crypto.randomUUID(),
       message.from.slice(0, 320),
+      fromName,
       subject,
       body,
       html,

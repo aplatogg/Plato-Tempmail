@@ -31,11 +31,13 @@ it("preserves populated pre-multi-user records, owner recovery credentials and p
   // vitest.config.ts supplies readD1Migrations() output: each query is already parsed,
   // including complete trigger bodies. This isolated file applies the two phases once.
   const legacy = bindings.TEST_MIGRATIONS.filter((migration) => /^000[1-3]_/.test(migration.name));
-  const upgrade = bindings.TEST_MIGRATIONS.filter((migration) =>
-    /^00(0[4-9]|10)_/.test(migration.name),
+  const upgrade = bindings.TEST_MIGRATIONS.filter(
+    (migration) => !/^000[1-3]_/.test(migration.name),
   );
   expect(legacy).toHaveLength(3);
-  expect(upgrade).toHaveLength(7);
+  // Every migration after the pre-multi-user baseline belongs to the upgrade phase,
+  // so this keeps covering 0011+ without another edit when one is added.
+  expect(upgrade).toHaveLength(bindings.TEST_MIGRATIONS.length - 3);
   await applyD1Migrations(bindings.DB, legacy);
   expect(
     await bindings.DB.prepare("SELECT name FROM sqlite_master WHERE name = 'users'").first(),
@@ -164,6 +166,9 @@ it("preserves populated pre-multi-user records, owner recovery credentials and p
       id: messageId,
       inboxId,
       from: "sender@example.net",
+      // Legacy rows predate the From display name; the column is null and the UI
+      // falls back to the address.
+      fromName: null,
       subject,
       body: text,
       receivedAt: timestamp - 50,

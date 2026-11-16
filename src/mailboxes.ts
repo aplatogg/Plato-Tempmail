@@ -400,7 +400,7 @@ inboxRoutes.get("/:id/messages", async (c) => {
     .bind(id, user.id, Number(isOwner(user)), ...fresh.values)
     .first();
   if (!inbox) throw new ApiError(404, "NOT_FOUND", "Inbox tidak ditemukan.");
-  let sql = `SELECT id, from_address AS "from", subject, substr(body,1,160) AS preview,
+  let sql = `SELECT id, from_address AS "from", from_name AS "fromName", subject, substr(body,1,160) AS preview,
     received_at AS receivedAt, expires_at AS expiresAt, COALESCE(r.is_read, 0) AS isRead
     FROM messages LEFT JOIN message_read_state r ON r.message_id = messages.id
     WHERE inbox_id = ? AND expires_at > ? AND inbox_id IN (${readableInboxIds}) AND (${fresh.sql})`;
@@ -415,8 +415,8 @@ inboxRoutes.get("/:id/messages", async (c) => {
     // instr is literal: %, _, quotes and backslashes are never wildcard syntax.
     // SQLite lower folds ASCII only; non-ASCII has exact matching, no Unicode normalization.
     sql +=
-      " AND (instr(lower(from_address), lower(?)) > 0 OR instr(lower(subject), lower(?)) > 0 OR instr(lower(body), lower(?)) > 0)";
-    parameters.push(term, term, term);
+      " AND (instr(lower(from_address), lower(?)) > 0 OR instr(lower(COALESCE(from_name, '')), lower(?)) > 0 OR instr(lower(subject), lower(?)) > 0 OR instr(lower(body), lower(?)) > 0)";
+    parameters.push(term, term, term, term);
   }
   if (unreadOnly) sql += " AND COALESCE(r.is_read, 0) = 0";
   if (cursor) {
@@ -481,7 +481,7 @@ inboxRoutes.delete("/:id/messages", async (c) => {
 messageRoutes.get("/:id", async (c) => {
   const fresh = freshSession(c);
   const message =
-    await c.env.DB.prepare(`SELECT id,inbox_id AS inboxId,from_address AS "from",subject,body,html,attachments,
+    await c.env.DB.prepare(`SELECT id,inbox_id AS inboxId,from_address AS "from",from_name AS "fromName",subject,body,html,attachments,
     received_at AS receivedAt, expires_at AS expiresAt, COALESCE(r.is_read, 0) AS isRead
     FROM messages LEFT JOIN message_read_state r ON r.message_id = messages.id
     WHERE id = ? AND expires_at > ? AND inbox_id IN (${readableInboxIds}) AND (${fresh.sql})`)

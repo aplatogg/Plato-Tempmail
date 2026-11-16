@@ -340,7 +340,7 @@ describe("inbox ownership and durable address privacy", () => {
     expect(backfill).toEqual({ owner: "owner", claimant: "owner", claimedAt: 42 });
     for (const [table, count] of [
       ["inboxes", 4],
-      ["messages", 10],
+      ["messages", 11],
     ] as const) {
       expect((await bindings.DB.prepare(`PRAGMA table_info(${table})`).all()).results).toHaveLength(
         count,

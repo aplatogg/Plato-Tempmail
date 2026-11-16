@@ -55,6 +55,11 @@ const systemTheme = matchMedia("(prefers-color-scheme: dark)");
 let theme = preference("theme") || "light";
 let notificationsEnabled = preference("notifications") === "true";
 let soundEnabled = preference("sound") !== "false";
+// Notification tone: a built-in name or "kustom" with an operator-supplied file.
+let soundTone = preference("sound-tone") || "chime";
+let soundVolume = Math.max(0, Math.min(1, Number(preference("sound-volume") ?? "70") / 100));
+if (!Number.isFinite(soundVolume)) soundVolume = 0.7;
+let customSoundBuffer = null;
 let audioContext = null;
 const requests = new Map();
 const authSignalKey = "plato.auth-change";
@@ -83,6 +88,26 @@ function formatDate(seconds, short = false) {
   return Number.isFinite(date.getTime())
     ? (short ? shortDate : dateFormat).format(date)
     : "Waktu tidak tersedia";
+}
+// The list shows the From display name when the sender supplied one, and the
+// local part otherwise; the full address stays reachable as the row's title.
+function senderName(message) {
+  const name = typeof message.fromName === "string" ? message.fromName.trim() : "";
+  if (name) return name;
+  const address = typeof message.from === "string" ? message.from : "";
+  const local = address.split("@")[0];
+  return local || "Pengirim tidak diketahui";
+}
+function senderNode(message) {
+  const node = element("span", "message-sender", senderName(message));
+  if (message.fromName && message.from) node.title = message.from;
+  return node;
+}
+function senderFull(message) {
+  const address = typeof message.from === "string" ? message.from : "";
+  const name = typeof message.fromName === "string" ? message.fromName.trim() : "";
+  if (name && address) return `${name} <${address}>`;
+  return address || "Pengirim tidak diketahui";
 }
 function element(tag, className, value) {
   const node = document.createElement(tag);
@@ -747,7 +772,7 @@ function renderMessages() {
     button.setAttribute("aria-current", String(message.id === state.messageId));
     const top = element("span", "message-top");
     top.append(
-      element("span", "message-sender", message.from || "Pengirim tidak diketahui"),
+      senderNode(message),
       element("span", "message-date", formatDate(message.receivedAt, true)),
     );
     button.append(
@@ -891,7 +916,7 @@ async function readMessage(id) {
     if (newerRead) data.message.isRead = change.isRead;
     state.message = data.message;
     text("message-subject", data.message.subject || "(Tanpa subjek)");
-    text("message-from", data.message.from || "Pengirim tidak diketahui");
+    text("message-from", senderFull(data.message));
     text("message-to", state.inbox.address);
     text("message-received", formatDate(data.message.receivedAt));
     text("message-expires", formatDate(data.message.expiresAt));
@@ -1119,6 +1144,7 @@ async function deleteConfirmed() {
     updateControls();
   }
 }
+const POLL_MS = 3000;
 function stopPolling() {
   clearInterval(pollTimer);
   pollTimer = null;
@@ -1126,7 +1152,9 @@ function stopPolling() {
 function startPolling() {
   stopPolling();
   const visible = document.visibilityState === "visible";
-  text("poll-status", visible ? "Pembaruan otomatis · 30 detik" : "Pembaruan dijeda");
+  // A temporary inbox is checked every 3s while the tab is visible, so an arrival
+  // reaches the sound and the list almost immediately instead of up to 30s later.
+  text("poll-status", visible ? "Pembaruan otomatis - 3 detik" : "Pembaruan dijeda");
   renderRefresh();
   if (!state.session || !visible) return;
   pollTimer = setInterval(() => {
@@ -1139,8 +1167,8 @@ function startPolling() {
     )
       return;
     void loadInboxes(true);
-    void loadMessages({ quiet: true });
-  }, 30000);
+    if (state.inbox) void loadMessages({ quiet: true });
+  }, POLL_MS);
 }
 
 // Only these non-secret preferences are persisted. Storage can be blocked by the browser.
@@ -1956,39 +1984,96 @@ function unlockAudio() {
   }
 }
 
+// One entry per selectable tone: a list of beeps, each with its own start offset.
+const SOUND_TONES = {
+  chime: [
+    { frequency: 880, delay: 0, duration: 0.12 },
+    { frequency: 1174.66, delay: 0.14, duration: 0.14 },
+  ],
+  bell: [{ frequency: 1046.5, delay: 0, duration: 0.4 }],
+  blip: [
+    { frequency: 660, delay: 0, duration: 0.07 },
+    { frequency: 990, delay: 0.09, duration: 0.08 },
+  ],
+  marimba: [
+    { frequency: 523.25, delay: 0, duration: 0.22 },
+    { frequency: 659.25, delay: 0.11, duration: 0.22 },
+    { frequency: 783.99, delay: 0.22, duration: 0.28 },
+  ],
+};
+
+// Plays from an already-decoded buffer when the operator supplied their own file,
+// so there is no fetch or decode between the arrival and the sound.
 function playNotificationSound() {
-  if (!soundEnabled || !audioContext) return;
+  if (!soundEnabled) return;
+  unlockAudio();
+  if (!audioContext) return;
   if (audioContext.state === "suspended") {
-    void audioContext
-      .resume()
-      .then(() => {
-        if (audioContext?.state === "running") playNotificationSound();
-      })
-      .catch(() => {});
+    // A suspended context only happens before the first gesture. Resume and play
+    // immediately after, so the first arrival is not silent.
+    void audioContext.resume().then(() => playNotificationSound()).catch(() => {});
     return;
   }
   if (audioContext.state !== "running") return;
   const context = audioContext;
-  const beep = (frequency, delay, duration) => {
+  const volume = Math.max(0, Math.min(1, soundVolume));
+  if (volume === 0) return;
+
+  if (soundTone === "kustom") {
+    if (!customSoundBuffer) return;
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = customSoundBuffer;
+    gain.gain.value = volume;
+    source.connect(gain).connect(context.destination);
+    source.start(); // starts on the next render quantum: no scheduling delay
+    return;
+  }
+
+  for (const { frequency, delay, duration } of SOUND_TONES[soundTone] ?? SOUND_TONES.chime) {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     oscillator.type = "sine";
     oscillator.frequency.value = frequency;
-    gain.gain.setValueAtTime(0.0001, context.currentTime + delay);
-    gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + delay + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + delay + duration);
+    const at = context.currentTime + delay;
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(0.18 * volume, at + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
     oscillator.connect(gain).connect(context.destination);
-    oscillator.start(context.currentTime + delay);
-    oscillator.stop(context.currentTime + delay + duration + 0.02);
-  };
-  beep(880, 0, 0.12);
-  beep(1174.66, 0.14, 0.14);
+    oscillator.start(at);
+    oscillator.stop(at + duration + 0.02);
+  }
+}
+
+async function decodeCustomSound(dataUrl) {
+  if (!dataUrl) {
+    customSoundBuffer = null;
+    return false;
+  }
+  unlockAudio();
+  if (!audioContext) return false;
+  try {
+    const bytes = await (await fetch(dataUrl)).arrayBuffer();
+    customSoundBuffer = await audioContext.decodeAudioData(bytes);
+    return true;
+  } catch {
+    customSoundBuffer = null;
+    return false;
+  }
 }
 
 function renderSound() {
   const button = $("sound-toggle");
   button.setAttribute("aria-pressed", String(soundEnabled));
   button.textContent = soundEnabled ? "Suara aktif" : "Suara mati";
+  const select = $("sound-tone");
+  if (select) select.value = soundTone;
+  const range = $("sound-volume");
+  if (range) range.value = String(Math.round(soundVolume * 100));
+  const pick = $("sound-file-pick");
+  if (pick) pick.hidden = soundTone !== "kustom";
+  const note = $("sound-custom-note");
+  if (note) note.hidden = !(soundTone === "kustom" && !customSoundBuffer);
 }
 
 function toggleSound() {
@@ -3041,3 +3126,106 @@ $("api-form").addEventListener("submit", (event) => {
   event.preventDefault();
   void createApiKey();
 });
+
+// ---------- Notification tone settings ----------
+const CUSTOM_SOUND_LIMIT = 400 * 1024;
+
+function openSoundSettings() {
+  $("sound-dialog").showModal();
+  setError("sound-error", "");
+  renderSound();
+}
+async function chooseSoundTone(value) {
+  soundTone = ["chime", "bell", "blip", "marimba", "kustom"].includes(value) ? value : "chime";
+  preference("sound-tone", soundTone);
+  if (soundTone === "kustom") {
+    const stored = preference("sound-custom");
+    if (stored && !customSoundBuffer) {
+      const ok = await decodeCustomSound(stored);
+      if (!ok) setError("sound-error", "File nada tersimpan tidak bisa dibaca. Pilih ulang.");
+    }
+    if (!stored) setError("sound-error", "Pilih file audio dulu untuk nada kustom.");
+  } else {
+    setError("sound-error", "");
+  }
+  renderSound();
+}
+function setSoundVolume(value) {
+  const percent = Math.max(0, Math.min(100, Number(value)));
+  soundVolume = (Number.isFinite(percent) ? percent : 70) / 100;
+  preference("sound-volume", String(Math.round(soundVolume * 100)));
+}
+async function handleSoundFile(file) {
+  if (!file) return;
+  if (file.size > CUSTOM_SOUND_LIMIT) {
+    setError("sound-error", "File terlalu besar. Maksimum 400 KB.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const dataUrl = typeof reader.result === "string" ? reader.result : "";
+    if (!dataUrl) {
+      setError("sound-error", "File tidak bisa dibaca.");
+      return;
+    }
+    const ok = await decodeCustomSound(dataUrl);
+    if (!ok) {
+      setError("sound-error", "Format audio tidak didukung browser ini. Coba MP3, WAV atau OGG.");
+      return;
+    }
+    try {
+      preference("sound-custom", dataUrl);
+    } catch {
+      setError("sound-error", "Nada tersimpan gagal (penyimpanan penuh). Pakai file yang lebih kecil.");
+      return;
+    }
+    preference("sound-tone", "kustom");
+    soundTone = "kustom";
+    setError("sound-error", "");
+    renderSound();
+    playNotificationSound();
+    announce("Nada kustom disimpan di perangkat ini.");
+  };
+  reader.onerror = () => setError("sound-error", "File tidak bisa dibaca.");
+  reader.readAsDataURL(file);
+}
+
+$("sound-settings").addEventListener("click", openSoundSettings);
+$("close-sound").addEventListener("click", () => $("sound-dialog").close());
+$("sound-tone").addEventListener("change", (event) => void chooseSoundTone(event.target.value));
+$("sound-volume").addEventListener("input", (event) => setSoundVolume(event.target.value));
+$("sound-volume").addEventListener("change", () => playNotificationSound());
+$("sound-test").addEventListener("click", () => {
+  unlockAudio();
+  playNotificationSound();
+});
+$("sound-file-pick").addEventListener("click", () => $("sound-file").click());
+$("sound-file").addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  void handleSoundFile(file);
+});
+
+// Restore the stored tone before the first arrival so the very first sound is right.
+if (soundTone === "kustom") {
+  const stored = preference("sound-custom");
+  if (stored) void decodeCustomSound(stored).then(() => renderSound());
+}
+renderSound();
+
+// Keep the audio context warm: a suspended context would swallow the first beep.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") unlockAudio();
+});
+// Browsers only start audio after a user gesture. The first pointerdown (the login
+// click) opens the context and decodes the stored custom tone, so the first arrival
+// after login is not silent.
+document.addEventListener(
+  "pointerdown",
+  () => {
+    unlockAudio();
+    const stored = soundTone === "kustom" ? preference("sound-custom") : null;
+    if (stored && !customSoundBuffer) void decodeCustomSound(stored);
+  },
+  { once: true, capture: true },
+);
