@@ -2,18 +2,11 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { authenticateApiKey } from "./apikeys";
 import { credentialConflict, freshSession, readAuthConfig, requireSession } from "./auth";
 import { canCreateInbox, canDeleteInbox, inboxQuota, isOwner } from "./roles";
+import { canClaimReserved, reservedCategory, reservedMessage } from "./reserved";
 import { ApiError, hex, readJson } from "./security";
 import type { AppBindings } from "./types";
 
-const reserved = new Set([
-  "admin",
-  "postmaster",
-  "abuse",
-  "security",
-  "mailer-daemon",
-  "noreply",
-  "no-reply",
-]);
+
 const authorize: MiddlewareHandler<AppBindings> = async (c, next) => {
   // A key-shaped credential authenticates as its own principal; anything else
   // falls back to the session cookie, so the same routes serve the app and bots.
@@ -115,12 +108,17 @@ export async function createInboxFor(c: Context<AppBindings>, custom?: string): 
   const localPart = custom
     ? custom.toLowerCase()
     : `mail-${hex(crypto.getRandomValues(new Uint8Array(8)))}`;
-  if (!/^[a-z0-9](?:[a-z0-9_-]|\.(?=[a-z0-9])){0,31}$/.test(localPart) || reserved.has(localPart)) {
+  if (!/^[a-z0-9](?:[a-z0-9_-]|\.(?=[a-z0-9])){0,31}$/.test(localPart)) {
     throw new ApiError(
       400,
       "INVALID_ADDRESS",
       "Gunakan 1–32 huruf, angka, titik, tanda - atau _. Titik tidak boleh di awal, akhir, atau berurutan.",
     );
+  }
+  // Reserved names imitate authority, support or the mail system itself; only
+  // Celestial may hold them, so the canonical addresses stay under the operator.
+  if (reservedCategory(localPart) && !canClaimReserved(c.get("user"))) {
+    throw new ApiError(403, "RESERVED_ADDRESS", reservedMessage(localPart));
   }
   const address = `${localPart}@${c.get("config").mailDomain}`;
   const id = crypto.randomUUID();

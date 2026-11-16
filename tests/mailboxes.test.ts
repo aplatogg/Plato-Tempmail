@@ -100,14 +100,23 @@ describe("private mailbox API", () => {
     "double..dot",
     "../x",
     " has space",
-    "admin",
-    "postmaster",
-    "ABUSE",
     "-start",
     "x".repeat(33),
-  ])("rejects invalid/reserved name %s", async (localPart) => {
+  ])("rejects invalid name %s", async (localPart) => {
     expect((await req("/api/inboxes", "POST", { localPart })).status).toBe(400);
   });
+  it.each(["admin", "postmaster", "ABUSE"])(
+    "lets Celestial claim the reserved name %s",
+    async (localPart) => {
+      // Reserved names imitate authority, support or the mail system; the owner
+      // holds them so the canonical addresses stay with the operator.
+      const response = await req("/api/inboxes", "POST", { localPart });
+      expect(response.status).toBe(201);
+      expect(((await response.json()) as { inbox: { address: string } }).inbox.address).toBe(
+        `${localPart.toLowerCase()}@example.com`,
+      );
+    },
+  );
   it("accepts dotted local parts with single internal dots", async () => {
     const box = await create("Work.Halfeast");
     expect(box.address).toBe("work.halfeast@example.com");

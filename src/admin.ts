@@ -14,6 +14,7 @@ import {
   validRoleMask,
 } from "./roles";
 import { ApiError, readJson } from "./security";
+import { canClaimReserved, reservedCategory, reservedMessage } from "./reserved";
 import type { AppBindings } from "./types";
 
 export const adminRoutes = new Hono<AppBindings>();
@@ -67,6 +68,11 @@ adminRoutes.post("/", async (c) => {
       "Provide an available lowercase username of 3–32 characters and a nonblank password of 5–1024 characters.",
     );
   const mask = body.roles === undefined ? 1 : parseRoles(body.roles);
+  // A username becomes an address, so the reserved rule covers this path too:
+  // only Celestial may hand out a name that reads as authority or as the system.
+  if (reservedCategory(body.username) && !canClaimReserved(c.get("user"))) {
+    throw new ApiError(403, "RESERVED_ADDRESS", reservedMessage(body.username));
+  }
   requireAssignable(c.get("user"), mask);
   const id = crypto.randomUUID();
   const createdAt = Math.floor(Date.now() / 1000);
