@@ -107,6 +107,7 @@ const STATIC_PATHS = new Set([
   "/manifest.webmanifest",
   "/sw.js",
   "/favicon.png",
+  "/favicon.svg",
   "/logo-mark.png",
 ]);
 
