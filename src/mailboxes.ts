@@ -250,7 +250,30 @@ export async function createInboxFor(c: Context<AppBindings>, custom?: string): 
     201,
   );
 }
+/**
+ * Inbox routes accept either the inbox UUID or its full address, so a client that
+ * only knows "someone@domain" can delete or read it without a lookup round-trip.
+ * Ownership is enforced here, before any mutation, with the same predicate the
+ * handlers use.
+ */
+async function resolveInboxId(c: Context<AppBindings>, raw: string): Promise<string> {
+  if (!raw.includes("@")) return raw;
+  let address: string;
+  try {
+    address = decodeURIComponent(raw).trim().toLowerCase();
+  } catch {
+    throw new ApiError(400, "INVALID_INPUT", "Alamat inbox tidak valid.");
+  }
+  const fresh = freshSession(c);
+  const row = await c.env.DB.prepare(`SELECT id FROM inboxes
+    WHERE address = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql})`)
+    .bind(address, c.get("user").id, ...fresh.values)
+    .first<{ id: string }>();
+  if (!row) throw new ApiError(404, "NOT_FOUND", "Inbox tidak ditemukan.");
+  return row.id;
+}
 inboxRoutes.patch("/:id", async (c) => {
+  const id = await resolveInboxId(c, c.req.param("id"));
   const favorite = await readBoolean(c.req.raw, "favorite");
   const fresh = freshSession(c);
   // Existence check and setter share one statement, including repeated same-value requests.
@@ -260,7 +283,7 @@ inboxRoutes.patch("/:id", async (c) => {
       SELECT id, ? FROM inboxes WHERE id = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql})
       ON CONFLICT(inbox_id) DO UPDATE SET favorite = excluded.favorite RETURNING inbox_id`).bind(
       Number(favorite),
-      c.req.param("id"),
+      id,
       c.get("user").id,
       ...fresh.values,
     ),
@@ -330,6 +353,7 @@ function parseWebhook(value: unknown): string | null {
 }
 
 inboxRoutes.put("/:id/webhook", async (c) => {
+  const id = await resolveInboxId(c, c.req.param("id"));
   const body = await readJson(c.req.raw, 4096);
   if (Object.keys(body).some((key) => key !== "url"))
     throw new ApiError(400, "INVALID_INPUT", "Kirim hanya url.");
@@ -340,7 +364,7 @@ inboxRoutes.put("/:id/webhook", async (c) => {
     c.env.DB.prepare(`SELECT 1 WHERE ${fresh.sql}`).bind(...fresh.values),
     c.env.DB.prepare(
       `UPDATE inboxes SET webhook_url = ? WHERE id = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql}) RETURNING id`,
-    ).bind(webhookUrl, c.req.param("id"), user.id, ...fresh.values),
+    ).bind(webhookUrl, id, user.id, ...fresh.values),
   ]);
   if (!authorized.results.length) credentialConflict();
   if (!updated.results.length) throw new ApiError(404, "NOT_FOUND", "Inbox tidak ditemukan.");
@@ -348,7 +372,7 @@ inboxRoutes.put("/:id/webhook", async (c) => {
 });
 
 inboxRoutes.delete("/:id", async (c) => {
-  const id = c.req.param("id");
+  const id = await resolveInboxId(c, c.req.param("id"));
   const user = c.get("user");
   const userId = user.id;
   if (!canDeleteInbox(user)) {
@@ -412,7 +436,7 @@ function parseCursor(cursor: string | undefined): [number, string] | null {
   }
 }
 inboxRoutes.get("/:id/messages", async (c) => {
-  const id = c.req.param("id");
+  const id = await resolveInboxId(c, c.req.param("id"));
   const user = c.get("user");
   const cursor = parseCursor(c.req.query("cursor"));
   const queries = c.req.queries("q") ?? [];
@@ -475,7 +499,7 @@ inboxRoutes.get("/:id/messages", async (c) => {
   return c.json({ messages, nextCursor });
 });
 inboxRoutes.post("/:id/read-all", async (c) => {
-  const id = c.req.param("id");
+  const id = await resolveInboxId(c, c.req.param("id"));
   const user = c.get("user");
   const fresh = freshSession(c);
   await c.env.DB.prepare(
@@ -491,7 +515,7 @@ inboxRoutes.post("/:id/read-all", async (c) => {
 });
 
 inboxRoutes.delete("/:id/messages", async (c) => {
-  const id = c.req.param("id");
+  const id = await resolveInboxId(c, c.req.param("id"));
   const user = c.get("user");
   const fresh = freshSession(c);
   // Count first: meta.changes on a DELETE also counts cascaded state rows.

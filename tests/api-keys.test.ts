@@ -207,6 +207,41 @@ describe("api keys", () => {
     const again = await bot("/api/v1/messages/m-del", "DELETE", undefined, token);
     expect(again.status).toBe(404);
   });
+  it("accepts the address in place of the inbox id", async () => {
+    const { token } = await mintKey();
+    const created = await bot("/api/v1/inboxes", "POST", { localPart: "buang.alamat1" }, token);
+    const inbox = ((await created.json()) as { inbox: { id: string; address: string } }).inbox;
+
+    // Reading a member's messages by address, then deleting the inbox by address.
+    const byAddress = await bot(
+      `/api/v1/inboxes/${encodeURIComponent(inbox.address)}/messages`,
+      "GET",
+      undefined,
+      token,
+    );
+    expect(byAddress.status).toBe(200);
+
+    const removed = await bot(
+      `/api/v1/inboxes/${encodeURIComponent(inbox.address)}`,
+      "DELETE",
+      undefined,
+      token,
+    );
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toEqual({ ok: true });
+
+    const list = await bot("/api/v1/inboxes", "GET", undefined, token);
+    const remaining = (await list.json()) as { inboxes: { id: string }[] };
+    expect(remaining.inboxes.some((item) => item.id === inbox.id)).toBe(false);
+
+    const again = await bot(
+      `/api/v1/inboxes/${encodeURIComponent(inbox.address)}`,
+      "DELETE",
+      undefined,
+      token,
+    );
+    expect(again.status).toBe(404);
+  });
   it("retires a key when it is revoked", async () => {
     const { id, token } = await mintKey();
     expect((await bot("/api/v1/me", "GET", undefined, token)).status).toBe(200);

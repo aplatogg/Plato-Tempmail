@@ -21,14 +21,14 @@ Format kunci: `hvk_<12 hex>_<48 hex>` (65 karakter). Yang disimpan server cuma S
 | GET | `/inboxes` | daftar inbox milik akun |
 | POST | `/inboxes` | buat 1 inbox, body `{"localPart": "..."}` (alias `name`, atau `address` lengkap) |
 | POST | `/inboxes/bulk` | buat banyak: `{"localParts": ["a","b"]}` **atau** `{"count": 10, "prefix": "budi"}` (maks 50) |
-| PATCH | `/inboxes/:id` | `{"favorite": true}` |
-| DELETE | `/inboxes/:id` | hapus inbox |
-| GET | `/inboxes/:id/messages` | daftar pesan; `?unread=1`, `?cursor=...` |
+| PATCH | `/inboxes/:id` | `{"favorite": true}` · `:id` boleh alamat |
+| DELETE | `/inboxes/:id` | **hapus alamat inbox** — `:id` boleh UUID **atau** alamat lengkap |
+| GET | `/inboxes/:id/messages` | daftar pesan; `?unread=1`, `?cursor=...` · `:id` boleh alamat |
 | GET | `/messages/:id` | isi pesan lengkap (`body`, `html`, `attachments`) |
 | PATCH | `/messages/:id` | `{"isRead": true}` |
 | DELETE | `/messages/:id` | **hapus satu pesan** (hanya pesan di inbox milik sendiri) |
 | POST | `/inboxes/:id/read-all` | tandai semua dibaca |
-| DELETE | `/inboxes/:id/messages` | kosongkan inbox |
+| DELETE | `/inboxes/:id/messages` | kosongkan inbox · `:id` boleh alamat |
 
 ## Contoh
 
@@ -59,6 +59,8 @@ curl -s -H "Authorization: Bearer $HALDGOFF_KEY" \
 curl -s -H "Authorization: Bearer $HALDGOFF_KEY" \
   https://mail.haldgoff.com/api/v1/messages/<message-id>
 ```
+
+Semua path `/inboxes/:id/...` menerima **UUID inbox atau alamat lengkap** (contoh: `/api/v1/inboxes/budi%40haldgoff.com`). Alamat di-encode (`%40` untuk `@`) supaya aman di path.
 
 `/inboxes/bulk` mengembalikan `{created: [{inbox:{id,address}}...], failed: [{address,status,error}]}`.
 
