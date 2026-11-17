@@ -1,4 +1,4 @@
-const CACHE = "haldgoff-mail-shell-v4";
+const CACHE = "haldgoff-mail-shell-v5";
 const ASSETS = [
   "/",
   "/styles.css",

@@ -50,6 +50,9 @@ export function readConfig(env: Env): AppConfig {
   // only global bound, and it exists to keep D1 from growing without limit.
   const rawMax = env.MAX_TOTAL_INBOXES ?? "10000";
   if (!/^[1-9][0-9]{0,5}$/.test(rawMax)) return configurationError();
+  // Member account ceiling, separate from the inbox cap above.
+  const rawMembers = env.MAX_MEMBER_ACCOUNTS ?? "100000";
+  if (!/^[1-9][0-9]{0,6}$/.test(rawMembers)) return configurationError();
   return {
     origin: url.origin,
     secure,
@@ -57,6 +60,7 @@ export function readConfig(env: Env): AppConfig {
     mailDomain: domain,
     retentionDays: Number(env.MESSAGE_RETENTION_DAYS),
     maxInboxes: Number(rawMax),
+    maxMembers: Number(rawMembers),
   };
 }
 
@@ -81,7 +85,7 @@ export function secureResponse(response: Response, request: Request): Response {
   result.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   result.headers.set(
     "Content-Security-Policy",
-    "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "default-src 'none'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   );
   if (new URL(request.url).protocol === "https:") {
     // Do not impose a transport policy on unrelated subdomains.

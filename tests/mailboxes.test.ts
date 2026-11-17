@@ -166,6 +166,17 @@ describe("private mailbox API", () => {
     expect(third.status).toBe(409);
     expect(await third.json()).toMatchObject({ error: { code: "INBOX_LIMIT" } });
   });
+  it("lists every inbox past the old 100-row cap", async () => {
+    // Regression: the sidebar query used LIMIT 100, so inbox 101+ were hidden.
+    await bindings.DB.prepare(`WITH RECURSIVE nums(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM nums WHERE n < 105)
+      INSERT INTO inboxes (id, address, created_at) SELECT 'bulk-'||n, 'bulk-'||n||'@example.com', 1 FROM nums`).run();
+    const response = await req("/api/inboxes");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { inboxes: unknown[]; total: number; truncated: boolean };
+    expect(body.inboxes).toHaveLength(105);
+    expect(body.total).toBe(105);
+    expect(body.truncated).toBe(false);
+  });
   it("paginates tied timestamps without duplication and omits bodies from lists", async () => {
     const inbox = await create();
     await seed(inbox.id, 61);

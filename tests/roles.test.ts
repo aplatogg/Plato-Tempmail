@@ -170,6 +170,7 @@ describe("fixed additive role contract", () => {
           user,
         ],
         assignableRoles: mask & 8 ? allRoles : ["peasant", "member", "member_paid", "dev"],
+        memberLimit: 100,
       });
     else if (mask & 2)
       expect(await list.json()).toEqual({
@@ -178,6 +179,7 @@ describe("fixed additive role contract", () => {
           user,
         ],
         assignableRoles: [],
+        memberLimit: 100,
       });
     const diagnostics = await request("/api/dev/diagnostics", own);
     expect(diagnostics.status).toBe(mask & 10 ? 200 : 403);
@@ -356,6 +358,8 @@ describe("fixed additive role contract", () => {
           address: "prabskie@example.com",
         }),
       ],
+      total: 1,
+      truncated: false,
     });
     expect((await request("/api/inboxes", own, { localPart: "second" })).status).toBe(403);
     expect(

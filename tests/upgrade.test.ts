@@ -142,6 +142,7 @@ it("preserves populated pre-multi-user records, owner recovery credentials and p
   expect(await admins.json()).toEqual({
     users: [{ ...identity, createdAt: null }],
     assignableRoles: ["member", "dev", "admin", "owner", "peasant", "member_paid"],
+      memberLimit: 100,
   });
   const inboxes = await request("/api/inboxes", token);
   expect(await inboxes.json()).toEqual({
@@ -158,6 +159,8 @@ it("preserves populated pre-multi-user records, owner recovery credentials and p
         webhookUrl: null,
       },
     ],
+    total: 1,
+    truncated: false,
   });
   const message = await request(`/api/messages/${messageId}`, token);
   expect(message.status).toBe(200);
@@ -201,7 +204,11 @@ it("preserves populated pre-multi-user records, owner recovery credentials and p
   expect(memberIdentity.role).toBe("user");
   expect(memberIdentity.id).not.toBe("owner");
   const memberToken = member.headers.get("set-cookie")?.split(";")[0] ?? "";
-  expect(await (await request("/api/inboxes", memberToken)).json()).toEqual({ inboxes: [] });
+  expect(await (await request("/api/inboxes", memberToken)).json()).toEqual({
+    inboxes: [],
+    total: 0,
+    truncated: false,
+  });
   expect((await request("/api/inboxes?userId=owner", memberToken)).status).toBe(403);
   expect((await request(`/api/inboxes/${inboxId}/messages`, memberToken)).status).toBe(404);
   expect((await request(`/api/messages/${messageId}`, memberToken)).status).toBe(404);

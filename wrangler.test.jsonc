@@ -30,6 +30,7 @@
     "ADMIN_USERNAME": "admin",
     "MESSAGE_RETENTION_DAYS": "7",
     "MAX_TOTAL_INBOXES": "100",
+    "MAX_MEMBER_ACCOUNTS": "100",
     "RESET_EMAIL_TO": "owner@example.com"
   },
   "triggers": { "crons": ["0 * * * *"] },

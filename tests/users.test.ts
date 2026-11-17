@@ -41,6 +41,13 @@ function post(path: string, cookie: string, body: unknown, overrides: Partial<En
   );
 }
 
+async function addUser(
+  cookie: string,
+  username: string,
+  overrides: Partial<Env> = {},
+): Promise<Response> {
+  return post("/api/admin/users", cookie, { username, password: "member-pass" }, overrides);
+}
 function login(username = "admin", value = "admin", overrides: Partial<Env> = {}) {
   return post("/api/auth/login", "", { username, password: value }, overrides);
 }
@@ -118,6 +125,17 @@ beforeEach(async () => {
 });
 
 describe("multi-user identity and credentials", () => {
+  it("honours a configured member account cap and reports it to the client", async () => {
+    const token = cookie(await login());
+    const listed = await request("/api/admin/users", { headers: { cookie: token } });
+    expect((await listed.json()) as { memberLimit: number }).toMatchObject({ memberLimit: 100 });
+
+    const capped = { MAX_MEMBER_ACCOUNTS: "1" };
+    expect((await addUser(token, "first", capped)).status).toBe(201);
+    const second = await addUser(token, "second", capped);
+    expect(second.status).toBe(409);
+    expect(await second.json()).toMatchObject({ error: { code: "USER_LIMIT_REACHED" } });
+  });
   it("lists the sole configured owner and creates a UUID member without private metadata", async () => {
     const token = await owner();
     const listed = await request("/api/admin/users", { headers: { cookie: token } });
@@ -125,6 +143,7 @@ describe("multi-user identity and credentials", () => {
     expect(await listed.json()).toEqual({
       users: [{ id: "owner", username: "admin", role: "owner", roles: ["owner"], createdAt: null }],
       assignableRoles: ["member", "dev", "admin", "owner", "peasant", "member_paid"],
+      memberLimit: 100,
     });
     const user = await member(token);
     expect(user).toEqual({
@@ -152,6 +171,7 @@ describe("multi-user identity and credentials", () => {
         second,
       ],
       assignableRoles: ["member", "dev", "admin", "owner", "peasant", "member_paid"],
+      memberLimit: 100,
     });
   });
 

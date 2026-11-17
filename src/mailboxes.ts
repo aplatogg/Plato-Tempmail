@@ -42,6 +42,10 @@ async function readBoolean(request: Request, field: "favorite" | "isRead"): Prom
   return body[field];
 }
 
+// Sidebar page size. Large enough that ordinary accounts see everything, bounded
+// so one enormous account cannot ship a multi-megabyte response to the browser.
+const INBOX_PAGE = 2000;
+
 inboxRoutes.get("/", async (c) => {
   const user = c.get("user");
   const selectors = c.req.queries("userId") ?? [];
@@ -74,12 +78,26 @@ inboxRoutes.get("/", async (c) => {
       WHERE m.inbox_id = inboxes.id AND m.expires_at > ?) AS latestArrival
     FROM inboxes LEFT JOIN inbox_favorites f ON f.inbox_id = inboxes.id
     WHERE inboxes.id IN (${ownedInboxIds}) AND (${fresh.sql})
-    ORDER BY favorite DESC, created_at DESC, id DESC LIMIT 100`)
+    ORDER BY favorite DESC, created_at DESC, id DESC LIMIT ${INBOX_PAGE + 1}`)
     .bind(timestamp, timestamp, timestamp, timestamp, userId, ...fresh.values)
     .all();
-  return c.json({
-    inboxes: results.map((inbox) => ({ ...inbox, favorite: inbox.favorite === 1 })),
-  });
+  // The sidebar used to stop at 100 rows, which silently hid every inbox past it.
+  // Return one extra row to detect truncation, then report the real total so the
+  // client can say so instead of pretending the account has fewer inboxes.
+  const truncated = results.length > INBOX_PAGE;
+  const inboxes = (truncated ? results.slice(0, INBOX_PAGE) : results).map((inbox) => ({
+    ...inbox,
+    favorite: inbox.favorite === 1,
+  }));
+  let total = inboxes.length;
+  if (truncated) {
+    const counted = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM inboxes
+      WHERE inboxes.id IN (${ownedInboxIds}) AND (${fresh.sql})`)
+      .bind(userId, ...fresh.values)
+      .first<{ n: number }>();
+    total = counted?.n ?? inboxes.length;
+  }
+  return c.json({ inboxes, total, truncated });
 });
 inboxRoutes.post("/", async (c) => {
   if (!canCreateInbox(c.get("user")))

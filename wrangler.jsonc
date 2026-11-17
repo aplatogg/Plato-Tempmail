@@ -29,7 +29,8 @@
     "PUBLIC_ORIGIN": "https://mail.example.com",
     "ADMIN_USERNAME": "operator",
     "MESSAGE_RETENTION_DAYS": "7",
-    "MAX_TOTAL_INBOXES": "10000",
+    "MAX_TOTAL_INBOXES": "100000",
+    "MAX_MEMBER_ACCOUNTS": "100000",
     "RESET_EMAIL_TO": "owner@example.com"
   },
   "triggers": { "crons": ["0 * * * *"] },

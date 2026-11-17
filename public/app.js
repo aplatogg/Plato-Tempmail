@@ -5,6 +5,8 @@ const state = {
   inspectedUser: null,
   users: [],
   usersReady: false,
+  inboxTotal: 0,
+  memberLimit: 100,
   assignableRoles: [],
   inboxes: [],
   inbox: null,
@@ -707,8 +709,13 @@ function renderInboxes() {
           : !visible.length
             ? "Tidak ada hasil. Coba alamat lain."
             : "";
-  text("inboxes-state", status);
-  show("inboxes-state", Boolean(status));
+  // Never pretend a truncated list is the whole account: say how many exist.
+  const truncatedNote =
+    state.inboxTotal > state.inboxes.length
+      ? `Menampilkan ${state.inboxes.length} dari ${state.inboxTotal} kotak masuk. Pakai pencarian untuk sisanya.`
+      : "";
+  text("inboxes-state", status || truncatedNote);
+  show("inboxes-state", Boolean(status || truncatedNote));
   $("inboxes-state").classList.toggle("is-error", state.inboxStatus === "error");
   show("retry-inboxes", state.inboxStatus === "error");
   updateControls();
@@ -727,6 +734,7 @@ async function loadInboxes(quiet = false) {
     const data = await promise;
     if (!Array.isArray(data?.inboxes)) throw new Error("Daftar kotak masuk tidak valid.");
     state.inboxes = data.inboxes;
+    state.inboxTotal = Number(data.total) || data.inboxes.length;
     checkNotifications(data.inboxes, quiet);
     state.inboxStatus = "ready";
     if (state.inbox) {
@@ -2321,6 +2329,12 @@ function clearUsers() {
   show("retry-users", false);
   updateUserControls();
 }
+// The member ceiling comes from the server (MAX_MEMBER_ACCOUNTS). Fall back to the
+// historical 100 so an older response still renders a sensible label.
+function memberLimit() {
+  const limit = Number(state.memberLimit);
+  return Number.isFinite(limit) && limit > 0 ? limit : 100;
+}
 function updateUserControls() {
   const count = state.users.filter((user) => user.id !== "owner").length;
   $("user-create-submit").disabled =
@@ -2392,7 +2406,7 @@ function renderUsers() {
   $("users-list").replaceChildren(fragment);
   text(
     "users-count",
-    `${state.users.filter((user) => user.id !== "owner").length}/100 akun tambahan`,
+    `${state.users.filter((user) => user.id !== "owner").length}/${memberLimit()} akun tambahan`,
   );
   updateUserControls();
 }
@@ -2439,6 +2453,7 @@ async function loadUsers() {
           role === "member_paid" ||
           role === "dev"),
     );
+    state.memberLimit = Number(data.memberLimit);
     state.usersReady = true;
     renderRoleChoices("create-roles", ["member"]);
     text("users-status", "");
@@ -2460,7 +2475,7 @@ async function createUser(event) {
     !$("users-dialog").open ||
     !state.usersReady ||
     userCreateBusy ||
-    state.users.filter((user) => user.id !== "owner").length >= 100
+    state.users.filter((user) => user.id !== "owner").length >= memberLimit()
   )
     return;
   const username = $("user-username").value.trim().toLowerCase();

@@ -50,6 +50,8 @@ adminRoutes.get("/", async (c) => {
       ...listed.results.map(publicUser),
     ],
     assignableRoles: assignableRoles(c.get("user")),
+    // The client needs the real ceiling: it labels the counter and gates the form.
+    memberLimit: c.get("config").maxMembers,
   });
 });
 
@@ -84,14 +86,16 @@ adminRoutes.post("/", async (c) => {
   // A peasant account owns exactly one inbox named after the username. Keep the
   // address collision and inbox quota inside the same INSERT predicate as the
   // account write, so a failed inbox can never leave a stranded account behind.
+  // Both ceilings are bound, not literals: the member count is its own limit and the
+  // peasant inbox uses the same deployment-wide inbox cap as every other creation path.
   const inboxGuard = peasant
     ? `AND NOT EXISTS (SELECT 1 FROM inboxes WHERE address = ?)
        AND NOT EXISTS (SELECT 1 FROM address_claims WHERE address = ?)
-       AND (SELECT COUNT(*) FROM inboxes) < 100`
+       AND (SELECT COUNT(*) FROM inboxes) < ?`
     : "";
   const userInsert =
     c.env.DB.prepare(`INSERT INTO users (id, username, password_verifier, revision, created_at, role_mask)
-      SELECT ?, ?, ?, 1, ?, ? WHERE ${fresh.sql} AND (SELECT COUNT(*) FROM users) < 100 ${inboxGuard}
+      SELECT ?, ?, ?, 1, ?, ? WHERE ${fresh.sql} AND (SELECT COUNT(*) FROM users) < ? ${inboxGuard}
       ON CONFLICT(username) DO NOTHING RETURNING id`).bind(
       id,
       body.username,
@@ -99,7 +103,8 @@ adminRoutes.post("/", async (c) => {
       createdAt,
       mask,
       ...fresh.values,
-      ...(peasant ? [inboxAddress, inboxAddress] : []),
+      c.get("config").maxMembers,
+      ...(peasant ? [inboxAddress, inboxAddress, c.get("config").maxInboxes] : []),
     );
   const inboxInsert = c.env.DB.prepare(`INSERT INTO inboxes (id, address, created_at)
       SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM users WHERE id = ?)
