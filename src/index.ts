@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { adminRoutes, auditLog } from "./admin";
 import { apiKeyRoutes } from "./apikeys";
 import { v1Routes } from "./api";
+import { pushRoutes } from "./push";
 import { cleanupAudit } from "./audit";
 import {
   changePassword,
@@ -27,9 +28,13 @@ const app = new Hono<AppBindings>();
 
 app.use("/api/*", async (c, next) => {
   const config = readConfig(c.env);
-  // /api/v1 is API-key authenticated, never cookie authenticated: it is not
-  // CSRF-prone and must be callable by bots that send no Origin header.
-  if (!c.req.path.startsWith("/api/v1/")) checkOrigin(c.req.raw, config);
+  // A request carrying an API key is never cookie authenticated, so it is not
+  // CSRF-prone and must be callable by bots that send no Origin header. /api/v1 is
+  // key-only; the other paths keep the check when they arrive with a cookie.
+  const keyed =
+    /^Bearer\s/i.test(c.req.header("authorization") ?? "") ||
+    Boolean(c.req.header("x-api-key"));
+  if (!keyed) checkOrigin(c.req.raw, config);
   c.set("config", config);
   await next();
 });
@@ -98,6 +103,7 @@ app.route("/api/inboxes", inboxRoutes);
 app.route("/api/messages", messageRoutes);
 app.route("/api/keys", apiKeyRoutes);
 app.route("/api/v1", v1Routes);
+app.route("/api/push", pushRoutes);
 
 const STATIC_PATHS = new Set([
   "/",

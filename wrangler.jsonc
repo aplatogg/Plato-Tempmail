@@ -31,6 +31,8 @@
     "MESSAGE_RETENTION_DAYS": "7",
     "MAX_TOTAL_INBOXES": "100000",
     "MAX_MEMBER_ACCOUNTS": "100000",
+    "VAPID_PUBLIC_KEY": "BJLe0liMMgFw4KFKPaF9A9_pbZu-AzIIseu917Aw7CZ-luxv0-Qe4oqP3nF4f9cm-W5AvhjyPQrGoEY8K5oVktk",
+    "VAPID_SUBJECT": "mailto:noreply@haldgoff.com",
     "RESET_EMAIL_TO": "owner@example.com"
   },
   "triggers": { "crons": ["0 * * * *"] },

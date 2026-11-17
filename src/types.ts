@@ -8,6 +8,9 @@ export interface Env {
   MESSAGE_RETENTION_DAYS: string;
   MAX_TOTAL_INBOXES?: string;
   MAX_MEMBER_ACCOUNTS?: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
   AUTH_PASSWORD_HASH?: string;
   RESET_EMAIL?: SendEmail;
   RESET_EMAIL_TO?: string;

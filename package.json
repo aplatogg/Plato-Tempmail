@@ -35,6 +35,7 @@
     "deploy:haldgoff": "npm run preflight:haldgoff && wrangler deploy --config wrangler.haldgoff.jsonc"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "^2.0.0",
     "hono": "4.13.13",
     "html-to-text": "10.0.1",
     "postal-mime": "4.1.4"

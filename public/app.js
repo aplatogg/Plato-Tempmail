@@ -3263,3 +3263,104 @@ document.addEventListener(
   },
   { once: true, capture: true },
 );
+
+// ---------- Background notifications (Web Push) ----------
+// A closed tab cannot poll, so the device is registered with the push service and
+// the worker notifies it on arrival. The service worker has no audio: closed-tab
+// alerts use the system sound, the chosen tone plays when the app is opened.
+function pushSupported() {
+  return (
+    typeof navigator !== "undefined" &&
+    "serviceWorker" in navigator &&
+    typeof PushManager !== "undefined" &&
+    typeof Notification !== "undefined"
+  );
+}
+function urlBase64ToUint8Array(base64) {
+  const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(padded);
+  const bytes = new Uint8Array(raw.length);
+  for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
+  return bytes;
+}
+async function pushRegistration() {
+  return navigator.serviceWorker.ready;
+}
+async function refreshPushState() {
+  const button = $("push-toggle");
+  if (!button) return;
+  if (!pushSupported()) {
+    button.disabled = true;
+    text("push-status", "Browser ini tidak mendukung notifikasi latar.");
+    return;
+  }
+  try {
+    const registration = await pushRegistration();
+    const existing = await registration.pushManager.getSubscription();
+    const enabled = Boolean(existing);
+    button.setAttribute("aria-pressed", String(enabled));
+    button.textContent = enabled ? "Latar aktif" : "Latar";
+    if (!enabled && Notification.permission === "denied") {
+      text("push-status", "Izin notifikasi diblokir; aktifkan lewat pengaturan browser.");
+    } else if (!enabled) {
+      text("push-status", "");
+    } else {
+      text("push-status", "Notifikasi latar aktif: pesan masuk dikabari walau tab ditutup.");
+    }
+  } catch {
+    text("push-status", "Notifikasi latar tidak tersedia.");
+  }
+}
+async function enableBackgroundPush() {
+  if (!pushSupported()) return;
+  setError("sound-error", "");
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    text("push-status", "Izin notifikasi ditolak.");
+    return;
+  }
+  const info = await api("/push", { slot: "push" });
+  if (!info?.publicKey) {
+    text("push-status", "Server belum menyiapkan notifikasi latar.");
+    return;
+  }
+  const registration = await pushRegistration();
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(info.publicKey),
+  });
+  await api("/push", { method: "POST", body: subscription.toJSON(), slot: "push" });
+  await refreshPushState();
+  announce("Notifikasi latar aktif di perangkat ini.");
+}
+async function disableBackgroundPush() {
+  const registration = await pushRegistration();
+  const subscription = await registration.pushManager.getSubscription();
+  if (subscription) {
+    await api("/push", {
+      method: "DELETE",
+      body: { endpoint: subscription.endpoint },
+      slot: "push",
+    }).catch(() => {});
+    await subscription.unsubscribe();
+  }
+  await refreshPushState();
+  announce("Notifikasi latar dimatikan di perangkat ini.");
+}
+async function toggleBackgroundPush() {
+  const button = $("push-toggle");
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  try {
+    const registration = await pushRegistration();
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) await disableBackgroundPush();
+    else await enableBackgroundPush();
+  } catch (error) {
+    text("push-status", errorText(error));
+  } finally {
+    button.disabled = false;
+  }
+}
+$("push-toggle").addEventListener("click", () => void toggleBackgroundPush());
+void refreshPushState();

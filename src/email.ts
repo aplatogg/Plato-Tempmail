@@ -1,5 +1,6 @@
 import { convert } from "html-to-text";
 import PostalMime from "postal-mime";
+import { notifyUser } from "./push";
 import { hex, readConfig } from "./security";
 import type { Env } from "./types";
 
@@ -190,6 +191,25 @@ export async function receiveEmail(
     )
     .first<{ id: string }>();
   if (inserted) {
+    // Background notification: the browser only hears about mail while a tab is
+    // open, so the device is told through Web Push instead. Best-effort, and never
+    // allowed to fail the delivery that is already stored.
+    const owner = await env.DB.prepare(`SELECT COALESCE(o.user_id, 'owner') AS userId
+      FROM inboxes i LEFT JOIN inbox_owners o ON o.inbox_id = i.id WHERE i.id = ?`)
+      .bind(inbox.id)
+      .first<{ userId: string }>();
+    if (owner?.userId) {
+      const push = notifyUser(env, owner.userId, {
+        title: fromName ?? recipient,
+        body: subject || "(tanpa subjek)",
+        inbox: recipient,
+        from: message.from.slice(0, 320),
+      }).catch(() => {
+        // A push failure must never surface as a mail failure.
+      });
+      if (ctx) ctx.waitUntil(push);
+      else await push;
+    }
     if (inbox.webhookUrl) {
       const payload = {
         inbox: recipient,

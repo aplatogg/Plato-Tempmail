@@ -1,4 +1,4 @@
-const CACHE = "haldgoff-mail-shell-v5";
+const CACHE = "haldgoff-mail-shell-v6";
 const ASSETS = [
   "/",
   "/styles.css",
@@ -54,5 +54,41 @@ self.addEventListener("fetch", (event) => {
             (cached) => cached || (request.mode === "navigate" ? caches.match("/") : undefined),
           ),
       ),
+  );
+});
+
+// ---------- Web Push ----------
+// The page can only poll while a tab is open, so the device is reached through the
+// push service instead. The service worker has no audio, so the notification uses
+// the system sound; the app plays the chosen tone when it is opened.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = typeof data.title === "string" && data.title ? data.title : "Haldgoff Mail";
+  const body = typeof data.body === "string" && data.body ? data.body : "Pesan baru";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      tag: typeof data.inbox === "string" ? data.inbox : undefined,
+      renotify: true,
+      data: { inbox: data.inbox, from: data.from },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of windows) {
+        if ("focus" in client) return client.focus();
+      }
+      return self.clients.openWindow("/");
+    })(),
   );
 });
