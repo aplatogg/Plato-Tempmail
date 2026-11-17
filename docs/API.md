@@ -26,6 +26,7 @@ Format kunci: `hvk_<12 hex>_<48 hex>` (65 karakter). Yang disimpan server cuma S
 | GET | `/inboxes/:id/messages` | daftar pesan; `?unread=1`, `?cursor=...` |
 | GET | `/messages/:id` | isi pesan lengkap (`body`, `html`, `attachments`) |
 | PATCH | `/messages/:id` | `{"isRead": true}` |
+| DELETE | `/messages/:id` | **hapus satu pesan** (hanya pesan di inbox milik sendiri) |
 | POST | `/inboxes/:id/read-all` | tandai semua dibaca |
 | DELETE | `/inboxes/:id/messages` | kosongkan inbox |
 

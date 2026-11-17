@@ -188,6 +188,25 @@ describe("api keys", () => {
     expect(body.message.body).toContain("918273");
   });
 
+  it("deletes one message with the key and refuses an unknown id", async () => {
+    const { token } = await mintKey();
+    const created = await bot("/api/v1/inboxes", "POST", { localPart: "trash" }, token);
+    const inbox = ((await created.json()) as { inbox: { id: string } }).inbox;
+    await bindings.DB.prepare(`INSERT INTO messages
+      (id, inbox_id, from_address, subject, body, received_at, expires_at, raw_digest)
+      VALUES ('m-del', ?, 'a@b.test', 'Buang', 'isi', 1000, 9999999999, 'dg-del')`)
+      .bind(inbox.id)
+      .run();
+
+    const removed = await bot("/api/v1/messages/m-del", "DELETE", undefined, token);
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toEqual({ ok: true });
+    const list = await bot(`/api/v1/inboxes/${inbox.id}/messages`, "GET", undefined, token);
+    expect(((await list.json()) as { messages: unknown[] }).messages).toHaveLength(0);
+
+    const again = await bot("/api/v1/messages/m-del", "DELETE", undefined, token);
+    expect(again.status).toBe(404);
+  });
   it("retires a key when it is revoked", async () => {
     const { id, token } = await mintKey();
     expect((await bot("/api/v1/me", "GET", undefined, token)).status).toBe(200);
