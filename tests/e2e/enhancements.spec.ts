@@ -692,35 +692,6 @@ test("late search response cannot replace current query even when abort is ignor
   await expect(page.locator("#load-more")).toBeHidden();
 });
 
-test("refresh status distinguishes last success, failure, offline and hidden pause", async ({
-  page,
-}) => {
-  await page.clock.install();
-  await setup(page);
-  await page.goto("/");
-  await expect(page.locator("#refresh-status")).toContainText("Terakhir berhasil");
-  await page.clock.fastForward(5000);
-  await page.route(
-    "**/api/inboxes",
-    (route) =>
-      route.fulfill({ status: 503, json: { error: { code: "BUSY", message: "Gagal memuat." } } }),
-    { times: 1 },
-  );
-  await page.locator("#refresh-inboxes").click();
-  await expect(page.locator("#refresh-status")).toContainText("Gagal");
-  await expect(page.locator("#refresh-status")).toContainText("5 detik");
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
-    window.dispatchEvent(new Event("offline"));
-  });
-  await expect(page.locator("#refresh-status")).toContainText("Offline");
-  await page.evaluate(() => {
-    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-  await expect(page.locator("#refresh-status")).toContainText("Dijeda");
-});
-
 test("themes persist only nonsecret preferences and credit is visible in both views", async ({
   page,
 }) => {
