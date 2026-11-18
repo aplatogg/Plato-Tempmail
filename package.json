@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^2.0.0",
-    "hono": "4.13.13",
+    "hono": "4.13.19",
     "html-to-text": "10.0.1",
     "postal-mime": "4.1.4"
   },
