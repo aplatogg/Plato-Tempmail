@@ -40,4 +40,5 @@ exports/
 wrangler.bitpixe.jsonc
 wrangler.haldgoff.jsonc
 wrangler.dev.jsonc
+wrangler.platoware-space.jsonc
 .owner-password.txt
