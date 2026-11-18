@@ -22,7 +22,7 @@ const admin = principal("admin-1", ["admin"], "manager");
 const otherOwner = principal("owner-2", ["owner"], "second-owner");
 const diagnostics = {
   ok: true,
-  application: { name: "Bitpixe Mail", mailDomain: "example.com", retentionDays: 7 },
+  application: { name: "Haldgoff Mail", mailDomain: "example.com", retentionDays: 7 },
   database: { ok: true },
   counts: { users: 4, inboxes: 12, messages: 23 },
 };
@@ -344,7 +344,7 @@ for (const roles of [["member"], ["dev"], ["admin"], ["admin", "dev"], ["owner"]
     await expect(page.locator("#new-inbox")).toBeVisible();
     await page.locator("#open-diagnostics").evaluate((button: HTMLButtonElement) => button.click());
     if (canDev) {
-      await expect(page.locator("#diagnostics-data")).toContainText("Bitpixe Mail");
+      await expect(page.locator("#diagnostics-data")).toContainText("Haldgoff Mail");
       await expect(page.locator("#diagnostics-data")).toContainText("23");
       expect(data.calls.find((c) => c.path === "/api/dev/diagnostics")?.principal).toBe("actor");
     } else {

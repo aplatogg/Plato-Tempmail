@@ -727,9 +727,9 @@ test("themes persist only nonsecret preferences and credit is visible in both vi
   await setup(page, false);
   await page.goto("/");
   const credit = page
-    .getByRole("link", { name: "bitpixe — private mail on the edge", exact: true })
+    .getByRole("link", { name: "haldgoff — private mail on the edge", exact: true })
     .filter({ visible: true });
-  await expect(credit).toHaveAttribute("href", "https://bitpixe.com");
+  await expect(credit).toHaveAttribute("href", "https://mail.haldgoff.com");
   await expect(credit).toHaveAttribute("rel", "noopener noreferrer");
   await expect(credit).toHaveAttribute("target", "_blank");
   await page.locator("#login-theme").selectOption("dark");
@@ -1002,7 +1002,7 @@ test("notifications are explicit, generic, deduplicated and closed on logout", a
   data.inboxes[0].unreadCount = 0;
   await page.clock.fastForward(30000);
   expect((await notificationLog(page)).shown).toEqual([
-    "Bitpixe Mail Ada pesan baru. Buka aplikasi untuk membaca.",
+    "Haldgoff Mail Ada pesan baru. Buka aplikasi untuk membaca.",
   ]);
   await page.locator("#logout").click();
   await expect(page.locator("#login")).toBeVisible();
@@ -1176,20 +1176,20 @@ test("arrival watermark never falls back to message IDs for missing or invalid s
   expect((await notificationLog(page)).shown).toHaveLength(1);
 });
 
-test("Bitpixe Mail branding and password dialog explain the current account session policy", async ({
+test("Haldgoff Mail branding and password dialog explain the current account session policy", async ({
   page,
 }) => {
   const data = await setup(page);
   await page.goto("/");
-  await expect(page).toHaveTitle(/^(\(\d+\) )?Bitpixe Mail/);
-  await expect(page.locator("#workspace .brand-wordmark")).toHaveText("bitpixe");
+  await expect(page).toHaveTitle(/^(\(\d+\) )?Haldgoff Mail/);
+  await expect(page.locator("#workspace .brand-wordmark")).toHaveText("haldgoff");
   await expect(page.locator("#workspace .brand-product")).toHaveText("Mail");
   await page.locator("#account-settings").click();
   await expect(page.locator("#password-help")).toContainText(
     "Gunakan 5–1024 karakter, berbeda dari kata sandi saat ini",
   );
   await expect(page.locator("#password-help")).toContainText("semua sesi akun Anda akan keluar");
-  await expect(page.locator("#password-help")).toContainText("Masuk kembali ke Bitpixe Mail");
+  await expect(page.locator("#password-help")).toContainText("Masuk kembali ke Haldgoff Mail");
   await page.keyboard.press("Escape");
   expect(data.passwords).toHaveLength(0);
 });
