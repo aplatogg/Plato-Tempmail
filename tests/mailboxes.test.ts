@@ -172,7 +172,11 @@ describe("private mailbox API", () => {
       INSERT INTO inboxes (id, address, created_at) SELECT 'bulk-'||n, 'bulk-'||n||'@example.com', 1 FROM nums`).run();
     const response = await req("/api/inboxes");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { inboxes: unknown[]; total: number; truncated: boolean };
+    const body = (await response.json()) as {
+      inboxes: unknown[];
+      total: number;
+      truncated: boolean;
+    };
     expect(body.inboxes).toHaveLength(105);
     expect(body.total).toBe(105);
     expect(body.truncated).toBe(false);

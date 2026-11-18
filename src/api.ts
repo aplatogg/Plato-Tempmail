@@ -53,11 +53,53 @@ v1Routes.get("/me", (c) => {
 // With no prefix, names are generated from word pairs plus a number, the shape a
 // person actually picks: titikwiduri54, kurirpaket55. Never _ -, never a hex code.
 const BULK_WORDS = [
-  "titik", "widuri", "kurir", "paket", "budi", "lestari", "umar", "santoso", "dewi",
-  "sari", "agus", "putri", "joko", "siti", "rahma", "bayu", "nisa", "fajar", "indah",
-  "rizky", "maya", "dimas", "sekar", "yoga", "lina", "taufik", "wulan", "hendra",
-  "citra", "dian", "arif", "nadia", "galih", "ratna", "bagas", "sinta", "eko", "tri",
-  "wisnu", "kartika", "darma", "novi", "aldi", "pertiwi", "yuni", "hanif", "reza",
+  "titik",
+  "widuri",
+  "kurir",
+  "paket",
+  "budi",
+  "lestari",
+  "umar",
+  "santoso",
+  "dewi",
+  "sari",
+  "agus",
+  "putri",
+  "joko",
+  "siti",
+  "rahma",
+  "bayu",
+  "nisa",
+  "fajar",
+  "indah",
+  "rizky",
+  "maya",
+  "dimas",
+  "sekar",
+  "yoga",
+  "lina",
+  "taufik",
+  "wulan",
+  "hendra",
+  "citra",
+  "dian",
+  "arif",
+  "nadia",
+  "galih",
+  "ratna",
+  "bagas",
+  "sinta",
+  "eko",
+  "tri",
+  "wisnu",
+  "kartika",
+  "darma",
+  "novi",
+  "aldi",
+  "pertiwi",
+  "yuni",
+  "hanif",
+  "reza",
 ];
 function randomBelow(limit: number): number {
   return crypto.getRandomValues(new Uint32Array(1))[0] % limit;
@@ -83,7 +125,7 @@ v1Routes.post("/inboxes/bulk", async (c) => {
   const body = await readJson(c.req.raw);
   const allowed = ["count", "prefix", "localParts"];
   if (Object.keys(body).some((key) => !allowed.includes(key))) {
-    throw new ApiError(400, "INVALID_INPUT", 'body accepts {count, prefix} or {localParts}.');
+    throw new ApiError(400, "INVALID_INPUT", "body accepts {count, prefix} or {localParts}.");
   }
 
   const exact = body.localParts;
@@ -98,12 +140,21 @@ v1Routes.post("/inboxes/bulk", async (c) => {
       throw new ApiError(400, "INVALID_INPUT", "localParts must be an array of 1 to 50 strings.");
     }
     if (body.count !== undefined || body.prefix !== undefined) {
-      throw new ApiError(400, "INVALID_INPUT", "localParts cannot be combined with count or prefix.");
+      throw new ApiError(
+        400,
+        "INVALID_INPUT",
+        "localParts cannot be combined with count or prefix.",
+      );
     }
     total = exact.length;
   } else {
     const rawCount = body.count;
-    if (typeof rawCount !== "number" || !Number.isInteger(rawCount) || rawCount < 1 || rawCount > 50) {
+    if (
+      typeof rawCount !== "number" ||
+      !Number.isInteger(rawCount) ||
+      rawCount < 1 ||
+      rawCount > 50
+    ) {
       throw new ApiError(400, "INVALID_INPUT", "count must be an integer from 1 to 50.");
     }
     total = rawCount;
@@ -134,7 +185,11 @@ v1Routes.post("/inboxes/bulk", async (c) => {
         else failed.push({ address: exact[i], status: result.status, error: result.payload });
       } catch (error) {
         if (!(error instanceof ApiError)) throw error;
-        failed.push({ address: exact[i], status: error.status, error: { code: error.code, message: error.message } });
+        failed.push({
+          address: exact[i],
+          status: error.status,
+          error: { code: error.code, message: error.message },
+        });
         if (error.status === 403) stopped = true;
       }
       continue;
@@ -160,7 +215,11 @@ v1Routes.post("/inboxes/bulk", async (c) => {
         if (!(error instanceof ApiError)) throw error;
         // A collision on a generated name is expected: try another number.
         if (error.code === "ADDRESS_EXISTS" && attempt < 3) continue;
-        failed.push({ address: localPart, status: error.status, error: { code: error.code, message: error.message } });
+        failed.push({
+          address: localPart,
+          status: error.status,
+          error: { code: error.code, message: error.message },
+        });
         settled = true;
         if (error.status === 403 || error.status === 409) stopped = true;
       }

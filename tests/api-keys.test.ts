@@ -1,8 +1,4 @@
-import {
-  applyD1Migrations,
-  createExecutionContext,
-  waitOnExecutionContext,
-} from "cloudflare:test";
+import { applyD1Migrations, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
@@ -98,16 +94,20 @@ describe("api keys", () => {
     const { token } = await mintKey();
     const one = await bot("/api/v1/inboxes", "POST", { localPart: "solo" }, token);
     expect(one.status).toBe(201);
-    expect((await one.json())).toMatchObject({ inbox: { address: "solo@example.com" } });
+    expect(await one.json()).toMatchObject({ inbox: { address: "solo@example.com" } });
 
     const bulk = await bot("/api/v1/inboxes/bulk", "POST", { count: 3, prefix: "run" }, token);
     expect(bulk.status).toBe(201);
-    const batch = (await bulk.json()) as { created: { inbox: { address: string } }[]; failed: unknown[] };
+    const batch = (await bulk.json()) as {
+      created: { inbox: { address: string } }[];
+      failed: unknown[];
+    };
     expect(batch.created).toHaveLength(3);
     expect(batch.failed).toHaveLength(0);
     // A prefix is the caller's text; the server only appends digits. No dash,
     // no underscore, no hex code.
-    for (const item of batch.created) expect(item.inbox.address).toMatch(/^run\d{2,3}@example\.com$/);
+    for (const item of batch.created)
+      expect(item.inbox.address).toMatch(/^run\d{2,3}@example\.com$/);
   });
 
   it("generates human-shaped addresses when no prefix is given", async () => {
@@ -178,7 +178,9 @@ describe("api keys", () => {
 
     const list = await bot(`/api/v1/inboxes/${inbox.id}/messages`, "GET", undefined, token);
     expect(list.status).toBe(200);
-    const page = (await list.json()) as { messages: { id: string; subject: string; isRead: boolean }[] };
+    const page = (await list.json()) as {
+      messages: { id: string; subject: string; isRead: boolean }[];
+    };
     expect(page.messages).toHaveLength(1);
     expect(page.messages[0]).toMatchObject({ subject: "Kode OTP", isRead: false });
 

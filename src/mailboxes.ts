@@ -1,11 +1,10 @@
-import { Hono, type Context, type MiddlewareHandler } from "hono";
+import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { authenticateApiKey } from "./apikeys";
 import { credentialConflict, freshSession, readAuthConfig, requireSession } from "./auth";
-import { canCreateInbox, canDeleteInbox, inboxQuota, isOwner } from "./roles";
 import { canClaimReserved, reservedCategory, reservedMessage } from "./reserved";
+import { canCreateInbox, canDeleteInbox, inboxQuota, isOwner } from "./roles";
 import { ApiError, hex, readJson } from "./security";
 import type { AppBindings } from "./types";
-
 
 const authorize: MiddlewareHandler<AppBindings> = async (c, next) => {
   // A key-shaped credential authenticates as its own principal; anything else

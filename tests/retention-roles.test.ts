@@ -121,7 +121,12 @@ beforeEach(async () => {
 
 describe("retention per plan", () => {
   it("maps each role to its ceiling", () => {
-    const p = (roles: Principal["roles"]): Principal => ({ id: "x", username: "x", role: "user", roles });
+    const p = (roles: Principal["roles"]): Principal => ({
+      id: "x",
+      username: "x",
+      role: "user",
+      roles,
+    });
     expect(retentionDaysFor(p(["owner"]), 30)).toBe(30);
     expect(retentionDaysFor(p(["admin"]), 30)).toBe(30);
     expect(retentionDaysFor(p(["dev"]), 30)).toBe(30);
@@ -163,7 +168,12 @@ describe("retention per plan", () => {
 
 describe("api key eligibility", () => {
   it("allows every plan except Voyager and Quark", () => {
-    const p = (roles: Principal["roles"]): Principal => ({ id: "x", username: "x", role: "user", roles });
+    const p = (roles: Principal["roles"]): Principal => ({
+      id: "x",
+      username: "x",
+      role: "user",
+      roles,
+    });
     expect(canUseApiKey(p(["owner"]))).toBe(true);
     expect(canUseApiKey(p(["admin"]))).toBe(true);
     expect(canUseApiKey(p(["dev"]))).toBe(true);

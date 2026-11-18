@@ -1,5 +1,5 @@
-import { Hono, type Context, type MiddlewareHandler } from "hono";
-import { memberAuth, readAuthConfig, requireSession, type MemberRow } from "./auth";
+import { type Context, Hono, type MiddlewareHandler } from "hono";
+import { type MemberRow, memberAuth, readAuthConfig, requireSession } from "./auth";
 import { canUseApiKey, principal } from "./roles";
 import { ApiError, hex, readJson, sha256 } from "./security";
 import type { AppBindings, AuthConfig, Principal } from "./types";
@@ -55,7 +55,11 @@ export async function authenticateApiKey(c: Context<AppBindings>): Promise<boole
   let auth: AuthConfig;
   if (row.user_id === "owner") {
     if (row.credential_version !== ownerAuth.credentialVersion) {
-      throw new ApiError(401, "KEY_STALE", "This key predates a credential change. Create a new one.");
+      throw new ApiError(
+        401,
+        "KEY_STALE",
+        "This key predates a credential change. Create a new one.",
+      );
     }
     user = principal("owner", config.username, 8);
     auth = ownerAuth;
@@ -70,15 +74,23 @@ export async function authenticateApiKey(c: Context<AppBindings>): Promise<boole
       throw new ApiError(401, "KEY_STALE", "The account this key belongs to no longer exists.");
     }
     if (memberConfig.credentialVersion !== row.credential_version) {
-      throw new ApiError(401, "KEY_STALE", "This key predates a credential change. Create a new one.");
+      throw new ApiError(
+        401,
+        "KEY_STALE",
+        "This key predates a credential change. Create a new one.",
+      );
     }
     user = principal(member.id, member.username, member.role_mask);
     auth = memberConfig;
   }
 
-// Voyager and Quark cannot hold keys, even if a key row survives a downgrade.
+  // Voyager and Quark cannot hold keys, even if a key row survives a downgrade.
   if (!canUseApiKey(user)) {
-    throw new ApiError(403, "API_KEY_FORBIDDEN", "Peran Voyager dan Quark tidak dapat memakai kunci API.");
+    throw new ApiError(
+      403,
+      "API_KEY_FORBIDDEN",
+      "Peran Voyager dan Quark tidak dapat memakai kunci API.",
+    );
   }
 
   c.set("user", user);
@@ -88,7 +100,9 @@ export async function authenticateApiKey(c: Context<AppBindings>): Promise<boole
 
   // Usage stamp, at most one write per hour per key so polling stays read-mostly.
   if (row.last_used_at === null || row.last_used_at < now() - 3600) {
-    await c.env.DB.prepare("UPDATE api_keys SET last_used_at = ? WHERE id = ? AND revoked_at IS NULL")
+    await c.env.DB.prepare(
+      "UPDATE api_keys SET last_used_at = ? WHERE id = ? AND revoked_at IS NULL",
+    )
       .bind(now(), row.id)
       .run();
   }
@@ -114,19 +128,30 @@ apiKeyRoutes.get("/", async (c) => {
   const rows = await c.env.DB.prepare(`SELECT id, name, prefix, created_at, last_used_at, revoked_at
     FROM api_keys WHERE user_id = ? ORDER BY created_at DESC`)
     .bind(c.get("user").id)
-    .all<{ id: string; name: string; prefix: string; created_at: number; last_used_at: number | null; revoked_at: number | null }>();
+    .all<{
+      id: string;
+      name: string;
+      prefix: string;
+      created_at: number;
+      last_used_at: number | null;
+      revoked_at: number | null;
+    }>();
   return c.json({ keys: rows.results ?? [] });
 });
 
 apiKeyRoutes.post("/", async (c) => {
   const body = await readJson(c.req.raw);
   if (Object.keys(body).some((key) => key !== "name") || typeof body.name !== "string") {
-    throw new ApiError(400, "INVALID_INPUT", "body must be {\"name\": \"...\"}.");
+    throw new ApiError(400, "INVALID_INPUT", 'body must be {"name": "..."}.');
   }
   const name = body.name.trim().slice(0, 60);
   if (!name) throw new ApiError(400, "INVALID_INPUT", "A key needs a name.");
   if (!canUseApiKey(c.get("user"))) {
-    throw new ApiError(403, "API_KEY_FORBIDDEN", "Peran Voyager dan Quark tidak dapat membuat kunci API. Hubungi Celestial untuk upgrade.");
+    throw new ApiError(
+      403,
+      "API_KEY_FORBIDDEN",
+      "Peran Voyager dan Quark tidak dapat membuat kunci API. Hubungi Celestial untuk upgrade.",
+    );
   }
   const userId = c.get("user").id;
   const active = await c.env.DB.prepare(

@@ -1944,12 +1944,41 @@ dialog p {
     animation: none;
   }
 }
-.api-list { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
-.api-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; background: var(--raised); border-radius: var(--radius-card); }
-.api-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.api-name { font-size: var(--fs-body); font-weight: 600; overflow-wrap: anywhere; }
-.api-token { margin-top: 12px; }
-.api-token input { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: var(--fs-small); }
+.api-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.api-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--raised);
+  border-radius: var(--radius-card);
+}
+.api-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.api-name {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.api-token {
+  margin-top: 12px;
+}
+.api-token input {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-small);
+}
 
 /* Login: "trust this device" keeps the session for 30 days. */
 .trust-device {

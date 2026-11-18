@@ -13,19 +13,21 @@ const encoder = new TextEncoder();
 
 /** Throwaway P-256 pair so no real VAPID key ever lives in the repository. */
 async function vapidPair() {
-  const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+  const pair = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
     "sign",
     "verify",
-  ]);
-  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey));
-  const jwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+  ])) as unknown as { publicKey: CryptoKey; privateKey: CryptoKey };
+  const raw = new Uint8Array((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer);
+  const jwk = (await crypto.subtle.exportKey("jwk", pair.privateKey)) as JsonWebKey;
   const base64url = (bytes: Uint8Array) =>
-    btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+    btoa(String.fromCharCode(...bytes))
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replaceAll("=", "");
   return { publicKey: base64url(raw), privateKey: jwk.d as string };
 }
 
 let keys: { publicKey: string; privateKey: string };
-
 
 /** The deployment env with the throwaway VAPID pair the tests generate. */
 function configured(): Env {

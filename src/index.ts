@@ -1,8 +1,7 @@
 import { Hono } from "hono";
 import { adminRoutes, auditLog } from "./admin";
-import { apiKeyRoutes } from "./apikeys";
 import { v1Routes } from "./api";
-import { pushRoutes } from "./push";
+import { apiKeyRoutes } from "./apikeys";
 import { cleanupAudit } from "./audit";
 import {
   changePassword,
@@ -19,6 +18,7 @@ import {
 import { diagnostics } from "./diagnostics";
 import { cleanupMessages, receiveEmail } from "./email";
 import { inboxRoutes, messageRoutes } from "./mailboxes";
+import { pushRoutes } from "./push";
 import { cleanupResets, forgotPassword, resetPassword } from "./resets";
 import { canDeleteUsers, canManageUsers, canViewDiagnostics } from "./roles";
 import { ApiError, checkOrigin, readConfig, secureResponse } from "./security";
@@ -32,8 +32,7 @@ app.use("/api/*", async (c, next) => {
   // CSRF-prone and must be callable by bots that send no Origin header. /api/v1 is
   // key-only; the other paths keep the check when they arrive with a cookie.
   const keyed =
-    /^Bearer\s/i.test(c.req.header("authorization") ?? "") ||
-    Boolean(c.req.header("x-api-key"));
+    /^Bearer\s/i.test(c.req.header("authorization") ?? "") || Boolean(c.req.header("x-api-key"));
   if (!keyed) checkOrigin(c.req.raw, config);
   c.set("config", config);
   await next();

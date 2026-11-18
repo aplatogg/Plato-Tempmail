@@ -16,19 +16,28 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 function tracked() {
   const result = spawnSync("git", ["ls-files", "-z"], { cwd: root, encoding: "buffer" });
   assert.equal(result.status, 0, "git ls-files failed; this guard needs a checkout");
-  return result.stdout
-    .toString("utf8")
-    .split("\u0000")
-    .filter(Boolean);
+  return result.stdout.toString("utf8").split("\u0000").filter(Boolean);
 }
 
 const PATTERNS = [
   // Cloudflare account ids and D1 database ids that are not obvious placeholders.
-  { name: "cloudflare account id", re: /\b[0-9a-f]{32}\b/g, allow: (m) => /^(0+|0*1|00112233445566778899aabbccddeeff)$/.test(m) },
-  { name: "d1 database id", re: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g, allow: (m) => /^(.)\1{7}-/.test(m) || /^00112233-/.test(m) },
+  {
+    name: "cloudflare account id",
+    re: /\b[0-9a-f]{32}\b/g,
+    allow: (m) => /^(0+|0*1|00112233445566778899aabbccddeeff)$/.test(m),
+  },
+  {
+    name: "d1 database id",
+    re: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g,
+    allow: (m) => /^(.)\1{7}-/.test(m) || /^00112233-/.test(m),
+  },
   // Live tokens and keys.
   { name: "cloudflare api token", re: /\bcfut_[A-Za-z0-9]{20,}/g },
-  { name: "haldgoff api key", re: /\bhvk_[0-9a-f]{12}_[0-9a-f]{16,}/g, allow: (m) => /^hvk_0{12}_0+$/.test(m) },
+  {
+    name: "haldgoff api key",
+    re: /\bhvk_[0-9a-f]{12}_[0-9a-f]{16,}/g,
+    allow: (m) => /^hvk_0{12}_0+$/.test(m),
+  },
   // Real mailboxes used during development.
   { name: "owner mailbox", re: /\b(pridedeadlysins7|erinta586)\w*@gmail\.com/gi },
   // A committed local password hash.

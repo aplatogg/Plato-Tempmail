@@ -457,7 +457,10 @@ function startSession(data, inspectedUser = null) {
   show("open-diagnostics", canDiagnose());
   show("open-audit", isOwner());
   // Voyager (member) and Quark (peasant) have no API access; the server enforces it too.
-  show("open-api", rolesOf(data.user).some((role) => role !== "member" && role !== "peasant"));
+  show(
+    "open-api",
+    rolesOf(data.user).some((role) => role !== "member" && role !== "peasant"),
+  );
   show("admin-disclosure", !isOwner());
   show("inspection-banner", Boolean(state.inspectedUser));
   text(
@@ -1996,7 +1999,10 @@ function playNotificationSound() {
   if (audioContext.state === "suspended") {
     // A suspended context only happens before the first gesture. Resume and play
     // immediately after, so the first arrival is not silent.
-    void audioContext.resume().then(() => playNotificationSound()).catch(() => {});
+    void audioContext
+      .resume()
+      .then(() => playNotificationSound())
+      .catch(() => {});
     return;
   }
   if (audioContext.state !== "running") return;
@@ -2896,7 +2902,8 @@ $("password-dialog").addEventListener("close", () => {
   clearSessions();
 });
 $("revoke-others").addEventListener("click", revokeOtherSessions);
-$("open-audit").addEventListener("click", openAudit);$("close-audit").addEventListener("click", () => $("audit-dialog").close());
+$("open-audit").addEventListener("click", openAudit);
+$("close-audit").addEventListener("click", () => $("audit-dialog").close());
 $("refresh-audit").addEventListener("click", () => void loadAudit());
 $("audit-dialog").addEventListener("close", () => {
   $("audit-list").replaceChildren();
@@ -3090,7 +3097,10 @@ function renderApiKeys(keys) {
   const list = $("api-list");
   list.replaceChildren();
   const active = keys.filter((key) => !key.revoked_at).length;
-  text("api-status", keys.length ? `${active} kunci aktif dari ${keys.length}.` : "Belum ada kunci.");
+  text(
+    "api-status",
+    keys.length ? `${active} kunci aktif dari ${keys.length}.` : "Belum ada kunci.",
+  );
   for (const key of keys) {
     const row = element("li", "api-row");
     const main = element("div", "api-main");
@@ -3099,7 +3109,11 @@ function renderApiKeys(keys) {
       : "belum dipakai";
     main.append(
       element("span", "api-name", key.name),
-      element("span", "small muted", `${key.prefix}\u2026 \u00b7 ${key.revoked_at ? "dicabut" : seen}`),
+      element(
+        "span",
+        "small muted",
+        `${key.prefix}\u2026 \u00b7 ${key.revoked_at ? "dicabut" : seen}`,
+      ),
     );
     row.append(main);
     if (!key.revoked_at) {
@@ -3213,7 +3227,10 @@ async function handleSoundFile(file) {
   try {
     preference("sound-custom", dataUrl);
   } catch {
-    setError("sound-error", "Nada gagal disimpan (penyimpanan penuh). Pakai file yang lebih kecil.");
+    setError(
+      "sound-error",
+      "Nada gagal disimpan (penyimpanan penuh). Pakai file yang lebih kecil.",
+    );
     return;
   }
   customSoundBuffer = buffer;
@@ -3277,7 +3294,9 @@ function pushSupported() {
   );
 }
 function urlBase64ToUint8Array(base64) {
-  const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4))
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
   const raw = atob(padded);
   const bytes = new Uint8Array(raw.length);
   for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);

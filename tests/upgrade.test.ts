@@ -142,7 +142,7 @@ it("preserves populated pre-multi-user records, owner recovery credentials and p
   expect(await admins.json()).toEqual({
     users: [{ ...identity, createdAt: null }],
     assignableRoles: ["member", "dev", "admin", "owner", "peasant", "member_paid"],
-      memberLimit: 100,
+    memberLimit: 100,
   });
   const inboxes = await request("/api/inboxes", token);
   expect(await inboxes.json()).toEqual({

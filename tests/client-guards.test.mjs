@@ -26,5 +26,8 @@ test("no inline script is injected by the shell", () => {
   const inline = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/g)].filter(
     (m) => m[0].replace(/<script[^>]*>|<\/script>/g, "").trim().length > 0,
   );
-  assert.deepEqual(inline.map((m) => m[0].slice(0, 40)), []);
+  assert.deepEqual(
+    inline.map((m) => m[0].slice(0, 40)),
+    [],
+  );
 });

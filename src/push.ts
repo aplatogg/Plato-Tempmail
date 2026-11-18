@@ -1,11 +1,11 @@
-import { Hono } from "hono";
 import {
   buildPushPayload,
-  type PushSubscription as WebPushSubscription,
   type PushMessage,
+  type PushSubscription as WebPushSubscription,
 } from "@block65/webcrypto-web-push";
-import { readAuthConfig, requireSession } from "./auth";
+import { Hono } from "hono";
 import { authenticateApiKey } from "./apikeys";
+import { readAuthConfig, requireSession } from "./auth";
 import { ApiError, readJson } from "./security";
 import type { AppBindings, Env, Principal } from "./types";
 
@@ -110,9 +110,7 @@ export async function notifyUser(
       )
         .bind(row.id)
         .run();
-      await env.DB.prepare(
-        "DELETE FROM push_subscriptions WHERE id = ? AND failure_count >= 5",
-      )
+      await env.DB.prepare("DELETE FROM push_subscriptions WHERE id = ? AND failure_count >= 5")
         .bind(row.id)
         .run();
     }

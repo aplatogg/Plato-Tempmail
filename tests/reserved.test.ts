@@ -2,7 +2,7 @@ import { applyD1Migrations, createExecutionContext, waitOnExecutionContext } fro
 import { env } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
-import { canClaimReserved, reservedCategory, RESERVED } from "../src/reserved";
+import { canClaimReserved, RESERVED, reservedCategory } from "../src/reserved";
 import type { Env, Principal } from "../src/types";
 
 const bindings = env as unknown as Env & {

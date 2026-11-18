@@ -264,7 +264,9 @@ export async function login(c: Context<AppBindings>): Promise<Response> {
   // Allow JSON's six-byte escapes for all 1024 password and 64 username code units.
   const body = await readJson(c.req.raw, 8192);
   if (
-    Object.keys(body).some((key) => key !== "username" && key !== "password" && key !== "trustDevice") ||
+    Object.keys(body).some(
+      (key) => key !== "username" && key !== "password" && key !== "trustDevice",
+    ) ||
     (body.trustDevice !== undefined && typeof body.trustDevice !== "boolean") ||
     typeof body.username !== "string" ||
     body.username.length < 1 ||
