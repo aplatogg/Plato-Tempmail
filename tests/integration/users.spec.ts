@@ -105,7 +105,11 @@ test("real Worker multiuser isolation, read-only owner inspection and targeted p
       if (status === 200) {
         await expect(page.locator("#workspace")).toBeVisible();
         await expect(page.locator("#account-name")).toHaveText(username);
-        expect((await response).request().postDataJSON()).toEqual({ username, password });
+        expect((await response).request().postDataJSON()).toEqual({
+          username,
+          password,
+          trustDevice: true,
+        });
       } else {
         await expect(page.locator("#login-error")).toBeVisible();
         await expect(page.locator("#workspace")).toBeHidden();
@@ -155,7 +159,7 @@ test("real Worker multiuser isolation, read-only owner inspection and targeted p
     let ownerMessageId: string;
     await test.step("owner logs in and creates two members through the actual admin UI", async () => {
       await owner.goto(url.href);
-      await expect(owner.locator("#login a[href='https://bitpixe.com']")).toBeVisible();
+      await expect(owner.locator("#login a[href='https://mail.haldgoff.com']")).toBeVisible();
       await login(owner, "admin", "admin");
       await expect(owner.locator("#manage-users")).toBeVisible();
       await expect(owner.locator("#admin-disclosure")).toBeHidden();
@@ -472,11 +476,11 @@ test("real Worker multiuser isolation, read-only owner inspection and targeted p
         for (const field of await page.locator("input[type='password']").all())
           await expect(field).toHaveValue("");
         await expect(page.locator("a.credit:visible")).toHaveText(
-          "bitpixe — private mail on the edge",
+          "haldgoff — private mail on the edge",
         );
         await expect(page.locator("a.credit:visible")).toHaveAttribute(
           "href",
-          "https://bitpixe.com",
+          "https://mail.haldgoff.com",
         );
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),

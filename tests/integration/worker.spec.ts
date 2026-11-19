@@ -179,7 +179,7 @@ test("real Worker assets, cookie auth, MIME ingestion and cross-device mailbox",
     await page.getByLabel("Kata sandi", { exact: true }).fill("Fresh-local-password-782345");
     await page.getByRole("button", { name: "Masuk", exact: true }).click();
     await expect(page.locator("#workspace")).toBeVisible();
-    await expect(page.locator("#workspace a[href='https://bitpixe.com']")).toBeVisible();
+    await expect(page.locator("#workspace a[href='https://mail.haldgoff.com']")).toBeVisible();
     const logoutResponse = page.waitForResponse(
       (response) =>
         response.url() === new URL("/api/auth/logout", url).href &&

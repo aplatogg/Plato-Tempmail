@@ -15,7 +15,7 @@ test("local Worker multi-role API contract, role revocation and immutable bootst
     vars: {
       PUBLIC_ORIGIN: "http://127.0.0.1",
       ADMIN_USERNAME: "admin",
-      APP_NAME: "Bitpixe Mail",
+      APP_NAME: "Haldgoff Mail",
       MAIL_DOMAIN: "example.com",
       MESSAGE_RETENTION_DAYS: "7",
     },
@@ -97,7 +97,7 @@ test("local Worker multi-role API contract, role revocation and immutable bootst
     ).toBe(403);
     expect(await (await request("/api/dev/diagnostics", manager)).json()).toEqual({
       ok: true,
-      application: { name: "Bitpixe Mail", mailDomain: "example.com", retentionDays: 7 },
+      application: { name: "Haldgoff Mail", mailDomain: "example.com", retentionDays: 7 },
       database: { ok: true },
       counts: { users: 2, inboxes: 0, messages: 0 },
     });
