@@ -22,6 +22,7 @@
     "test:tooling": "node --test tests/tooling.test.mjs tests/secrets.test.mjs tests/client-guards.test.mjs",
     "preflight": "node scripts/preflight.mjs --config wrangler.local.jsonc",
     "build": "wrangler deploy --dry-run --outdir dist --config wrangler.local.jsonc",
+    "build:ci": "wrangler deploy --dry-run --outdir dist --config wrangler.jsonc",
     "deploy": "npm run preflight && wrangler deploy --config wrangler.local.jsonc",
     "dev:bitpixe": "wrangler dev --config wrangler.bitpixe.jsonc --local --ip 127.0.0.1 --port 8788",
     "preflight:bitpixe": "node scripts/preflight.mjs --config wrangler.bitpixe.jsonc",

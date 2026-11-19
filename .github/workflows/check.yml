@@ -45,6 +45,6 @@ jobs:
       - name: Real Worker browser integration
         run: npm run test:integration
       - name: Build (Wrangler dry run)
-        run: npm run build
+        run: npm run build:ci
       - name: Audit production dependencies
         run: npm audit --omit=dev
