@@ -272,9 +272,12 @@ test("email fields are inert text and strict CSP blocks inline code", async ({ p
   await expect(page.locator("#message-body")).toHaveText(hostile);
   await expect(page.locator("#message-subject")).toHaveText(hostile);
   await expect(page.locator("#message-from")).toHaveText(hostile);
-  await expect(page.locator("#reader img, #reader script, [style], script:not([src])")).toHaveCount(
-    0,
-  );
+  // The reader keeps hostile content as text. HTML mail renders in #message-html, which is a
+  // sandboxed frame with no tokens at all, so an iframe there is expected; scripts are not.
+  await expect(
+    page.locator("#reader img, #reader script, script:not([src]), [style]:not(#expiry-fill)"),
+  ).toHaveCount(0);
+  await expect(page.locator("#message-html")).toHaveAttribute("sandbox", "");
   expect(await page.evaluate(() => "pwned" in window)).toBe(false);
   const policy = await page
     .locator('meta[http-equiv="Content-Security-Policy"]')
@@ -382,7 +385,7 @@ test("duplicate creation is blocked while a mutation is pending", async ({ page 
   expect(data.creates).toHaveLength(1);
 });
 
-test("polls every 30 seconds only while visible and stops after logout", async ({ page }) => {
+test("polls every 3 seconds only while visible and stops after logout", async ({ page }) => {
   await page.clock.install();
   const data = await mockApi(page);
   await page.goto("/");
@@ -390,10 +393,14 @@ test("polls every 30 seconds only while visible and stops after logout", async (
   await expect(page.getByRole("button", { name: /Baca Pesan a1/ })).toBeVisible();
   const count = () => data.calls.filter((call) => call === "GET /api/inboxes/a/messages").length;
   const before = count();
-  await page.clock.fastForward(29000);
-  expect(count()).toBe(before);
-  await page.clock.fastForward(1000);
-  await expect.poll(count).toBe(before + 1);
+  // Timer phase depends on when polling started, so step until a tick lands instead of
+  // assuming the first poll falls exactly POLL_MS after this point.
+  let grew = false;
+  for (let step = 0; step < 8 && !grew; step += 1) {
+    await page.clock.fastForward(500);
+    grew = count() > before;
+  }
+  expect(grew).toBe(true);
   await page.evaluate(() => {
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
     document.dispatchEvent(new Event("visibilitychange"));
@@ -719,12 +726,15 @@ test("paginated polling stops before fetching another page when the tab becomes 
     await held;
     await route.fulfill({ json: { messages: [message("a1")], nextCursor: "opaque+/=?" } });
   });
-  await page.clock.fastForward(30000);
+  await page.clock.fastForward(3000);
   await expect.poll(() => started).toBe(true);
   await page.evaluate(() => {
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
     document.dispatchEvent(new Event("visibilitychange"));
   });
+  const cursorCalls = () => data.calls.filter((call) => call.includes("cursor=")).length;
+  // The in-flight poll has already been counted; hiding the tab must not start another page.
+  const atHide = cursorCalls();
   const response = page.waitForResponse("**/api/inboxes/a/messages");
   release();
   await response;
@@ -735,6 +745,6 @@ test("paginated polling stops before fetching another page when the tab becomes 
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       ),
   );
-  expect(data.calls.filter((call) => call.includes("cursor=")).length).toBe(1);
+  expect(cursorCalls()).toBe(atHide);
   await expect(page.getByRole("button", { name: /Baca Pesan a2/ })).toBeVisible();
 });

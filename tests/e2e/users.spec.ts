@@ -737,7 +737,11 @@ for (const status of [200, 401])
     await expect(page.locator("#password")).toBeFocused();
     const login = page.waitForRequest("**/api/auth/login");
     await page.locator("#login-submit").click();
-    expect((await login).postDataJSON()).toEqual({ username: "operator", password: secret });
+    expect((await login).postDataJSON()).toEqual({
+      username: "operator",
+      password: secret,
+      trustDevice: true,
+    });
     await expect(page.locator("#workspace")).toBeVisible();
   });
 

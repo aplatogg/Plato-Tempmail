@@ -867,8 +867,17 @@ async function loadMessages({ more = false, quiet = false } = {}) {
       messages.push(...data.messages);
       nextCursor = data.nextCursor || null;
       loaded += 1;
-    } while (nextCursor && loaded < pageLimit);
-    const merged = more ? [...state.messages, ...messages] : messages;
+      // A background poll must not keep paging while the tab is hidden; the pages it has
+      // already asked for still settle, but no new request starts after a visibility flip.
+    } while (
+      nextCursor &&
+      loaded < pageLimit &&
+      (!quiet || document.visibilityState === "visible")
+    );
+    // A hidden tab stops the window revalidation partway. That partial set is not
+    // authoritative, so keep the pages already on screen instead of truncating them.
+    const partial = quiet && document.visibilityState !== "visible";
+    const merged = more || partial ? [...state.messages, ...messages] : messages;
     // A read PATCH can finish during this fetch. Merge only newer local changes;
     // later fetches remain authoritative so other sessions can update read state.
     for (const message of merged) {
@@ -876,8 +885,8 @@ async function loadMessages({ more = false, quiet = false } = {}) {
       if (change && change.revision > revision) message.isRead = change.isRead;
     }
     state.messages = [...new Map(merged.map((item) => [item.id, item])).values()];
-    state.pageCount = more ? state.pageCount + 1 : loaded;
-    state.nextCursor = nextCursor;
+    state.pageCount = more ? state.pageCount + 1 : partial ? state.pageCount : loaded;
+    state.nextCursor = partial ? (state.nextCursor ?? nextCursor) : nextCursor;
     state.messageRetry = {};
     if (
       !more &&
