@@ -1,0 +1,608 @@
+import { type Context, Hono, type MiddlewareHandler } from "hono";
+import { authenticateApiKey } from "./apikeys";
+import { credentialConflict, freshSession, readAuthConfig, requireSession } from "./auth";
+import { canClaimReserved, reservedCategory, reservedMessage } from "./reserved";
+import { canCreateInbox, canDeleteInbox, inboxQuota, isOwner } from "./roles";
+import { ApiError, hex, readJson } from "./security";
+import type { AppBindings } from "./types";
+
+const authorize: MiddlewareHandler<AppBindings> = async (c, next) => {
+  // A key-shaped credential authenticates as its own principal; anything else
+  // falls back to the session cookie, so the same routes serve the app and bots.
+  if (!c.get("apiKey")) {
+    const byKey = await authenticateApiKey(c);
+    if (!byKey) {
+      c.set("auth", await readAuthConfig(c.env, c.get("config")));
+      await requireSession(c);
+    }
+  }
+  await next();
+};
+export const inboxRoutes = new Hono<AppBindings>();
+export const messageRoutes = new Hono<AppBindings>();
+inboxRoutes.use("*", authorize);
+messageRoutes.use("*", authorize);
+const now = () => Math.floor(Date.now() / 1000);
+
+// Unmapped legacy rows belong only to the owner. Inspection privilege never
+// appears in write predicates; every mutation checks ownership inside its SQL.
+const ownedInboxIds = `SELECT i.id FROM inboxes i
+  LEFT JOIN inbox_owners o ON o.inbox_id = i.id
+  WHERE COALESCE(o.user_id, 'owner') = ?`;
+const readableInboxIds = `SELECT i.id FROM inboxes i
+  LEFT JOIN inbox_owners o ON o.inbox_id = i.id
+  WHERE (COALESCE(o.user_id, 'owner') = ? OR ? = 1)`;
+
+async function readBoolean(request: Request, field: "favorite" | "isRead"): Promise<boolean> {
+  const body = await readJson(request);
+  if (Object.keys(body).some((key) => key !== field) || typeof body[field] !== "boolean") {
+    throw new ApiError(400, "INVALID_INPUT", `Gunakan satu field boolean ${field}.`);
+  }
+  return body[field];
+}
+
+// Sidebar page size. Large enough that ordinary accounts see everything, bounded
+// so one enormous account cannot ship a multi-megabyte response to the browser.
+const INBOX_PAGE = 2000;
+
+inboxRoutes.get("/", async (c) => {
+  const user = c.get("user");
+  const selectors = c.req.queries("userId") ?? [];
+  if (
+    selectors.length > 1 ||
+    (selectors.length === 1 && !/^[a-zA-Z0-9_-]{1,80}$/.test(selectors[0]))
+  ) {
+    throw new ApiError(400, "INVALID_INPUT", "Pilihan pengguna tidak valid.");
+  }
+  const userId = selectors[0] ?? user.id;
+  if (userId !== user.id && !isOwner(user)) {
+    throw new ApiError(403, "FORBIDDEN", "Pilihan pengguna tidak diizinkan.");
+  }
+  if (userId !== "owner" && userId !== user.id) {
+    const exists = await c.env.DB.prepare("SELECT id FROM users WHERE id = ?").bind(userId).first();
+    if (!exists) throw new ApiError(404, "NOT_FOUND", "Pengguna tidak ditemukan.");
+  }
+  const timestamp = now();
+  const fresh = freshSession(c);
+  const { results } = await c.env.DB.prepare(`SELECT id, address, created_at AS createdAt,
+    COALESCE(f.favorite, 0) AS favorite,
+    (SELECT COUNT(*) FROM messages WHERE inbox_id = inboxes.id AND expires_at > ?) AS messageCount,
+    (SELECT COUNT(*) FROM messages m LEFT JOIN message_read_state r ON r.message_id = m.id
+      WHERE m.inbox_id = inboxes.id AND m.expires_at > ? AND COALESCE(r.is_read, 0) = 0) AS unreadCount,
+    webhook_url AS webhookUrl,
+    (SELECT id FROM messages WHERE inbox_id = inboxes.id AND expires_at > ?
+      ORDER BY received_at DESC, id DESC LIMIT 1) AS latestMessageId,
+    (SELECT COALESCE(MAX(a.sequence), 0) FROM messages m
+      JOIN message_arrivals a ON a.message_id = m.id
+      WHERE m.inbox_id = inboxes.id AND m.expires_at > ?) AS latestArrival
+    FROM inboxes LEFT JOIN inbox_favorites f ON f.inbox_id = inboxes.id
+    WHERE inboxes.id IN (${ownedInboxIds}) AND (${fresh.sql})
+    ORDER BY favorite DESC, created_at DESC, id DESC LIMIT ${INBOX_PAGE + 1}`)
+    .bind(timestamp, timestamp, timestamp, timestamp, userId, ...fresh.values)
+    .all();
+  // The sidebar used to stop at 100 rows, which silently hid every inbox past it.
+  // Return one extra row to detect truncation, then report the real total so the
+  // client can say so instead of pretending the account has fewer inboxes.
+  const truncated = results.length > INBOX_PAGE;
+  const inboxes = (truncated ? results.slice(0, INBOX_PAGE) : results).map((inbox) => ({
+    ...inbox,
+    favorite: inbox.favorite === 1,
+  }));
+  let total = inboxes.length;
+  if (truncated) {
+    const counted = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM inboxes
+      WHERE inboxes.id IN (${ownedInboxIds}) AND (${fresh.sql})`)
+      .bind(userId, ...fresh.values)
+      .first<{ n: number }>();
+    total = counted?.n ?? inboxes.length;
+  }
+  return c.json({ inboxes, total, truncated });
+});
+inboxRoutes.post("/", async (c) => {
+  if (!canCreateInbox(c.get("user")))
+    throw new ApiError(403, "FORBIDDEN", "Quark hanya dapat memakai kotak masuk yang diberikan.");
+  if (c.req.queries("userId") !== undefined) {
+    throw new ApiError(400, "INVALID_INPUT", "Inbox hanya dapat dibuat untuk pengguna sendiri.");
+  }
+  const body = await readJson(c.req.raw);
+  // `localPart` is canonical. `name` and `address` are accepted aliases because
+  // automation clients reach for them first; `address` may carry a full
+  // `name@domain` and the domain is dropped when it matches this deployment.
+  const aliases = ["localPart", "name", "address"];
+  if (
+    Object.keys(body).some((key) => !aliases.includes(key)) ||
+    aliases.some((key) => body[key] !== undefined && typeof body[key] !== "string")
+  ) {
+    throw new ApiError(
+      400,
+      "INVALID_INPUT",
+      'Kirim {"localPart":"nama"} (alias: "name", atau "address" lengkap) — 1–32 karakter a-z 0-9 . _ - .',
+    );
+  }
+  let custom = (body.localPart ?? body.name ?? body.address) as string | undefined;
+  if (custom && custom.includes("@")) {
+    const [atLocal, atDomain] = custom.split("@");
+    if (atDomain.toLowerCase() !== c.get("config").mailDomain.toLowerCase()) {
+      throw new ApiError(400, "INVALID_DOMAIN", `Domain harus @${c.get("config").mailDomain}.`);
+    }
+    custom = atLocal;
+  }
+  return createInboxFor(c, custom);
+});
+
+/**
+ * Creates one inbox for the authenticated principal. Shared by the app route and
+ * the bulk API endpoint so both pass the same cap, claim, quota and address rules.
+ */
+export async function createInboxFor(c: Context<AppBindings>, custom?: string): Promise<Response> {
+  if (!canCreateInbox(c.get("user")))
+    throw new ApiError(403, "FORBIDDEN", "Peran ini tidak dapat membuat kotak masuk.");
+  const localPart = custom
+    ? custom.toLowerCase()
+    : `mail-${hex(crypto.getRandomValues(new Uint8Array(8)))}`;
+  if (!/^[a-z0-9](?:[a-z0-9_-]|\.(?=[a-z0-9])){0,31}$/.test(localPart)) {
+    throw new ApiError(
+      400,
+      "INVALID_ADDRESS",
+      "Gunakan 1–32 huruf, angka, titik, tanda - atau _. Titik tidak boleh di awal, akhir, atau berurutan.",
+    );
+  }
+  // Reserved names imitate authority, support or the mail system itself; only
+  // Celestial may hold them, so the canonical addresses stay under the operator.
+  if (reservedCategory(localPart) && !canClaimReserved(c.get("user"))) {
+    throw new ApiError(403, "RESERVED_ADDRESS", reservedMessage(localPart));
+  }
+  const address = `${localPart}@${c.get("config").mailDomain}`;
+  const id = crypto.randomUUID();
+  const createdAt = now();
+  const userId = c.get("user").id;
+  const quota = inboxQuota(c.get("user"));
+  if (quota) {
+    const counted = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM inboxes i
+      LEFT JOIN inbox_owners o ON o.inbox_id = i.id
+      WHERE COALESCE(o.user_id, 'owner') = ?
+        ${quota.since === null ? "" : "AND i.created_at >= ?"}`)
+      .bind(userId, ...(quota.since === null ? [] : [quota.since]))
+      .first<{ n: number }>();
+    if ((counted?.n ?? 0) >= quota.limit) {
+      throw new ApiError(
+        403,
+        "INBOX_QUOTA",
+        quota.since === null
+          ? "Kuota 6 inbox untuk Voyager sudah habis. Upgrade ke Stardust untuk 100 inbox per tahun."
+          : "Kuota 100 inbox Stardust untuk tahun ini sudah habis.",
+      );
+    }
+  }
+  const quotaSql = quota
+    ? `AND (SELECT COUNT(*) FROM inboxes i
+        LEFT JOIN inbox_owners o ON o.inbox_id = i.id
+        WHERE COALESCE(o.user_id, 'owner') = ?
+          ${quota.since === null ? "" : "AND i.created_at >= ?"}) < ?`
+    : "";
+  const quotaValues = quota
+    ? [userId, ...(quota.since === null ? [] : [quota.since]), quota.limit]
+    : [];
+  const fresh = freshSession(c);
+  // D1 batches execute transactionally. Only a newly inserted inbox can acquire
+  // a claim/mapping; a collision (including an unmapped legacy row) cannot.
+  // The quota and claim predicates run at the same write boundary as insertion.
+  // Classify stale sessions in the same transaction, before resource errors.
+  // Repeat the bound freshness predicate at every write, including side tables.
+  const [authorized, inserted, , , conflict] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT 1 WHERE ${fresh.sql}`).bind(...fresh.values),
+    c.env.DB.prepare(`INSERT INTO inboxes (id,address,created_at)
+      SELECT ?,?,? WHERE (SELECT COUNT(*) FROM inboxes) < ?
+        AND NOT EXISTS (SELECT 1 FROM address_claims WHERE address = ? AND user_id <> ?)
+        ${quotaSql}
+        AND (${fresh.sql})
+      ON CONFLICT(address) DO NOTHING RETURNING id`).bind(
+      id,
+      address,
+      createdAt,
+      c.get("config").maxInboxes,
+      address,
+      userId,
+      ...quotaValues,
+      ...fresh.values,
+    ),
+    c.env.DB.prepare(`INSERT INTO address_claims (address,user_id,claimed_at)
+      SELECT address,?,? FROM inboxes WHERE id = ? AND (${fresh.sql})
+      ON CONFLICT(address) DO NOTHING`).bind(userId, createdAt, id, ...fresh.values),
+    c.env.DB.prepare(`INSERT INTO inbox_owners (inbox_id,user_id)
+      SELECT id,? FROM inboxes WHERE id = ? AND (${fresh.sql})`).bind(userId, id, ...fresh.values),
+    // Capture collision classification in this same transaction, before any
+    // concurrent delete/recreate can change the reason for a rejected insert.
+    c.env.DB.prepare(`SELECT 1 AS collision WHERE EXISTS (SELECT 1 FROM inboxes WHERE address = ?)
+      OR EXISTS (SELECT 1 FROM address_claims WHERE address = ? AND user_id <> ?)`).bind(
+      address,
+      address,
+      userId,
+    ),
+  ]);
+  if (!authorized.results.length) credentialConflict();
+  if (!inserted.results.length) {
+    const exists = conflict.results.length > 0;
+    throw new ApiError(
+      409,
+      exists ? "ADDRESS_EXISTS" : "INBOX_LIMIT",
+      exists
+        ? "Email sudah digunakan. Silakan gunakan email lain."
+        : quota
+          ? "Batas kuota inbox akun ini sudah tercapai."
+          : `Batas ${c.get("config").maxInboxes} inbox untuk deployment ini tercapai.`,
+    );
+  }
+  return c.json(
+    {
+      inbox: {
+        id,
+        address,
+        createdAt,
+        messageCount: 0,
+        favorite: false,
+        unreadCount: 0,
+        latestMessageId: null,
+        latestArrival: 0,
+      },
+    },
+    201,
+  );
+}
+/**
+ * Inbox routes accept either the inbox UUID or its full address, so a client that
+ * only knows "someone@domain" can delete or read it without a lookup round-trip.
+ * Ownership is enforced here, before any mutation, with the same predicate the
+ * handlers use.
+ */
+async function resolveInboxId(c: Context<AppBindings>, raw: string): Promise<string> {
+  if (!raw.includes("@")) return raw;
+  let address: string;
+  try {
+    address = decodeURIComponent(raw).trim().toLowerCase();
+  } catch {
+    throw new ApiError(400, "INVALID_INPUT", "Alamat inbox tidak valid.");
+  }
+  const fresh = freshSession(c);
+  const row = await c.env.DB.prepare(`SELECT id FROM inboxes
+    WHERE address = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql})`)
+    .bind(address, c.get("user").id, ...fresh.values)
+    .first<{ id: string }>();
+  if (!row) throw new ApiError(404, "NOT_FOUND", "Inbox tidak ditemukan.");
+  return row.id;
+}
+inboxRoutes.patch("/:id", async (c) => {
+  const id = await resolveInboxId(c, c.req.param("id"));
+  const favorite = await readBoolean(c.req.raw, "favorite");
+  const fresh = freshSession(c);
+  // Existence check and setter share one statement, including repeated same-value requests.
+  const [authorized, updated] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT 1 WHERE ${fresh.sql}`).bind(...fresh.values),
+    c.env.DB.prepare(`INSERT INTO inbox_favorites (inbox_id, favorite)
+      SELECT id, ? FROM inboxes WHERE id = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql})
+      ON CONFLICT(inbox_id) DO UPDATE SET favorite = excluded.favorite RETURNING inbox_id`).bind(
+      Number(favorite),
+      id,
+      c.get("user").id,
+      ...fresh.values,
+    ),
+  ]);
+  if (!authorized.results.length) credentialConflict();
+  if (!updated.results.length) throw new ApiError(404, "NOT_FOUND", "Inbox tidak ditemukan.");
+  return c.json({ ok: true });
+});
+function isPrivateIpv4(host: string): boolean {
+  const parts = host.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return false;
+  const octets = parts.map(Number);
+  if (octets.some((octet) => octet > 255)) return false;
+  const [a, b, c] = octets;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && c === 0) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
+    a >= 224
+  );
+}
+
+function isPrivateHost(hostname: string): boolean {
+  const host = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (isPrivateIpv4(host)) return true;
+  // Hosts such as 127.0.0.1.nip.io or 127-0-0-1.sslip.io resolve to a private address.
+  // Reject private IPv4 literals embedded as the leading DNS label as well as wildcard DNS rebinding domains.
+  const embedded = host.match(/^(\d{1,3}(?:[.-]\d{1,3}){3})(?:\..*)?$/);
+  if (embedded && isPrivateIpv4(embedded[1].replace(/-/g, "."))) return true;
+  if (
+    /^(?:.*\.)?(?:internal|local|lan|home|localhost|nip\.io|sslip\.io|xip\.io|localtest\.me|lvh\.me|vcap\.me|traefik\.me)$/.test(
+      host,
+    )
+  )
+    return true;
+  if (host.includes(":")) {
+    if (host === "::" || host === "::1") return true;
+    if (host.startsWith("::ffff:")) return true;
+    if (/^(?:64:ff9b|2002|100):/i.test(host)) return true;
+    if (/^f[cd][0-9a-f]{2}:/.test(host)) return true;
+    if (/^fe[89ab][0-9a-f]:/.test(host)) return true;
+    if (/^ff[0-9a-f]{2}:/.test(host)) return true;
+    if (/^2001:(?:db8|0{0,4})(?::|$)/.test(host)) return true;
+  }
+  return false;
+}
+
+function parseWebhook(value: unknown): string | null {
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || value.length > 2048)
+    throw new ApiError(400, "INVALID_URL", "URL webhook tidak valid.");
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ApiError(400, "INVALID_URL", "URL webhook tidak valid.");
+  }
+  if (url.protocol !== "https:" || url.username || url.password || isPrivateHost(url.hostname))
+    throw new ApiError(400, "INVALID_URL", "Gunakan URL https publik untuk webhook.");
+  return url.toString();
+}
+
+inboxRoutes.put("/:id/webhook", async (c) => {
+  const id = await resolveInboxId(c, c.req.param("id"));
+  const body = await readJson(c.req.raw, 4096);
+  if (Object.keys(body).some((key) => key !== "url"))
+    throw new ApiError(400, "INVALID_INPUT", "Kirim hanya url.");
+  const webhookUrl = parseWebhook(body.url);
+  const user = c.get("user");
+  const fresh = freshSession(c);
+  const [authorized, updated] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT 1 WHERE ${fresh.sql}`).bind(...fresh.values),
+    c.env.DB.prepare(
+      `UPDATE inboxes SET webhook_url = ? WHERE id = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql}) RETURNING id`,
+    ).bind(webhookUrl, id, user.id, ...fresh.values),
+  ]);
+  if (!authorized.results.length) credentialConflict();
+  if (!updated.results.length) throw new ApiError(404, "NOT_FOUND", "Inbox tidak ditemukan.");
+  return c.json({ ok: true, webhook: webhookUrl !== null });
+});
+
+inboxRoutes.delete("/:id", async (c) => {
+  const id = await resolveInboxId(c, c.req.param("id"));
+  const user = c.get("user");
+  const userId = user.id;
+  if (!canDeleteInbox(user)) {
+    // Preserve the non-disclosing 404 for foreign/missing IDs, but reject an
+    // owned inbox with an explicit role error before any mutation.
+    const owned = await c.env.DB.prepare(`SELECT 1 FROM inboxes WHERE id = ?
+      AND id IN (${ownedInboxIds})`)
+      .bind(id, userId)
+      .first();
+    if (!owned) throw new ApiError(404, "NOT_FOUND", "Inbox tidak ditemukan.");
+    throw new ApiError(
+      403,
+      "FORBIDDEN",
+      "Hanya Cosmos, Astral, atau Celestial yang dapat menghapus inbox.",
+    );
+  }
+  const fresh = freshSession(c);
+  // Also reserve post-migration positional legacy inserts before deleting them.
+  // FK cascades remove messages/state/mapping, but never address reservations.
+  const [authorized, , deleted] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT 1 WHERE ${fresh.sql}`).bind(...fresh.values),
+    c.env.DB.prepare(`INSERT INTO address_claims (address,user_id,claimed_at)
+      SELECT address,?,created_at FROM inboxes WHERE id = ? AND id IN (${ownedInboxIds})
+        AND (${fresh.sql})
+      ON CONFLICT(address) DO NOTHING`).bind(userId, id, userId, ...fresh.values),
+    c.env.DB.prepare(
+      `DELETE FROM inboxes WHERE id = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql}) RETURNING id`,
+    ).bind(id, userId, ...fresh.values),
+  ]);
+  if (!authorized.results.length) credentialConflict();
+  if (!deleted.results.length) throw new ApiError(404, "NOT_FOUND", "Inbox tidak ditemukan.");
+  return c.json({ ok: true });
+});
+
+interface MessageSummary {
+  id: string;
+  from: string;
+  subject: string;
+  preview: string;
+  receivedAt: number;
+  expiresAt: number;
+  isRead: number;
+}
+function parseCursor(cursor: string | undefined): [number, string] | null {
+  if (cursor === undefined) return null;
+  try {
+    if (cursor.length > 256 || !/^[a-zA-Z0-9_-]+$/.test(cursor)) throw new Error();
+    const data: unknown = JSON.parse(atob(cursor.replace(/-/g, "+").replace(/_/g, "/")));
+    if (
+      !Array.isArray(data) ||
+      data.length !== 2 ||
+      !Number.isSafeInteger(data[0]) ||
+      data[0] < 0 ||
+      typeof data[1] !== "string" ||
+      !/^[a-zA-Z0-9_-]{1,80}$/.test(data[1])
+    )
+      throw new Error();
+    return data as [number, string];
+  } catch {
+    throw new ApiError(400, "INVALID_CURSOR", "Penanda halaman tidak valid.");
+  }
+}
+inboxRoutes.get("/:id/messages", async (c) => {
+  const id = await resolveInboxId(c, c.req.param("id"));
+  const user = c.get("user");
+  const cursor = parseCursor(c.req.query("cursor"));
+  const queries = c.req.queries("q") ?? [];
+  const search = queries[0] ?? "";
+  // Bound the decoded input before trimming (200 UTF-16 code units, matching JS length).
+  if (queries.length > 1 || search.length > 200 || search.includes("\0")) {
+    throw new ApiError(400, "INVALID_QUERY", "Pencarian maksimal 200 karakter tanpa karakter NUL.");
+  }
+  const term = search.trim();
+  const filters = c.req.queries("filter") ?? [];
+  const unreadOnly = filters.length === 1 && filters[0] === "unread";
+  if (filters.length > 1 || (filters.length === 1 && !unreadOnly)) {
+    throw new ApiError(400, "INVALID_QUERY", "Filter tidak dikenal.");
+  }
+  const fresh = freshSession(c);
+  const inbox = await c.env.DB.prepare(
+    `SELECT id FROM inboxes WHERE id = ? AND id IN (${readableInboxIds}) AND (${fresh.sql})`,
+  )
+    .bind(id, user.id, Number(isOwner(user)), ...fresh.values)
+    .first();
+  if (!inbox) throw new ApiError(404, "NOT_FOUND", "Inbox tidak ditemukan.");
+  let sql = `SELECT id, from_address AS "from", from_name AS "fromName", subject, substr(body,1,160) AS preview,
+    received_at AS receivedAt, expires_at AS expiresAt, COALESCE(r.is_read, 0) AS isRead
+    FROM messages LEFT JOIN message_read_state r ON r.message_id = messages.id
+    WHERE inbox_id = ? AND expires_at > ? AND inbox_id IN (${readableInboxIds}) AND (${fresh.sql})`;
+  const parameters: (string | number)[] = [
+    id,
+    now(),
+    user.id,
+    Number(isOwner(user)),
+    ...fresh.values,
+  ];
+  if (term) {
+    // instr is literal: %, _, quotes and backslashes are never wildcard syntax.
+    // SQLite lower folds ASCII only; non-ASCII has exact matching, no Unicode normalization.
+    sql +=
+      " AND (instr(lower(from_address), lower(?)) > 0 OR instr(lower(COALESCE(from_name, '')), lower(?)) > 0 OR instr(lower(subject), lower(?)) > 0 OR instr(lower(body), lower(?)) > 0)";
+    parameters.push(term, term, term, term);
+  }
+  if (unreadOnly) sql += " AND COALESCE(r.is_read, 0) = 0";
+  if (cursor) {
+    sql += " AND (received_at < ? OR (received_at = ? AND id < ?))";
+    parameters.push(cursor[0], cursor[0], cursor[1]);
+  }
+  sql += " ORDER BY received_at DESC,id DESC LIMIT 31";
+  const { results } = await c.env.DB.prepare(sql)
+    .bind(...parameters)
+    .all<MessageSummary>();
+  const messages = results
+    .slice(0, 30)
+    .map((message) => ({ ...message, isRead: message.isRead === 1 }));
+  const last = messages.at(-1);
+  const nextCursor =
+    results.length > 30 && last
+      ? btoa(JSON.stringify([last.receivedAt, last.id]))
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_")
+          .replace(/=+$/, "")
+      : null;
+  return c.json({ messages, nextCursor });
+});
+inboxRoutes.post("/:id/read-all", async (c) => {
+  const id = await resolveInboxId(c, c.req.param("id"));
+  const user = c.get("user");
+  const fresh = freshSession(c);
+  await c.env.DB.prepare(
+    `INSERT INTO message_read_state (message_id, is_read)
+     SELECT m.id, 1 FROM messages m
+      WHERE m.inbox_id = ? AND m.expires_at > ?
+        AND EXISTS (SELECT 1 FROM inboxes WHERE id = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql}))
+     ON CONFLICT(message_id) DO UPDATE SET is_read = 1`,
+  )
+    .bind(id, now(), id, user.id, ...fresh.values)
+    .run();
+  return c.json({ ok: true });
+});
+
+inboxRoutes.delete("/:id/messages", async (c) => {
+  const id = await resolveInboxId(c, c.req.param("id"));
+  const user = c.get("user");
+  const fresh = freshSession(c);
+  // Count first: meta.changes on a DELETE also counts cascaded state rows.
+  const counted = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM messages
+      WHERE inbox_id = ?
+        AND EXISTS (SELECT 1 FROM inboxes WHERE id = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql}))`,
+  )
+    .bind(id, id, user.id, ...fresh.values)
+    .first<{ total: number }>();
+  await c.env.DB.prepare(
+    `DELETE FROM messages
+      WHERE inbox_id = ?
+        AND EXISTS (SELECT 1 FROM inboxes WHERE id = ? AND id IN (${ownedInboxIds}) AND (${fresh.sql}))`,
+  )
+    .bind(id, id, user.id, ...fresh.values)
+    .run();
+  return c.json({ ok: true, deleted: counted?.total ?? 0 });
+});
+
+messageRoutes.get("/:id", async (c) => {
+  const fresh = freshSession(c);
+  const message =
+    await c.env.DB.prepare(`SELECT id,inbox_id AS inboxId,from_address AS "from",from_name AS "fromName",subject,body,html,attachments,
+    received_at AS receivedAt, expires_at AS expiresAt, COALESCE(r.is_read, 0) AS isRead
+    FROM messages LEFT JOIN message_read_state r ON r.message_id = messages.id
+    WHERE id = ? AND expires_at > ? AND inbox_id IN (${readableInboxIds}) AND (${fresh.sql})`)
+      .bind(
+        c.req.param("id"),
+        now(),
+        c.get("user").id,
+        Number(isOwner(c.get("user"))),
+        ...fresh.values,
+      )
+      .first();
+  if (!message)
+    throw new ApiError(404, "NOT_FOUND", "Pesan tidak ditemukan atau sudah kedaluwarsa.");
+  const { attachments, ...rest } = message as Record<string, unknown> & { attachments?: string };
+  let files: unknown[] = [];
+  if (typeof attachments === "string") {
+    try {
+      const parsed = JSON.parse(attachments);
+      if (Array.isArray(parsed)) files = parsed.slice(0, 20);
+    } catch {
+      files = [];
+    }
+  }
+  return c.json({
+    message: { ...rest, attachments: files, isRead: message.isRead === 1 },
+  });
+});
+messageRoutes.patch("/:id", async (c) => {
+  const isRead = await readBoolean(c.req.raw, "isRead");
+  const fresh = freshSession(c);
+  // Filtering before the upsert prevents updates to existing state for expired messages.
+  const [authorized, updated] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT 1 WHERE ${fresh.sql}`).bind(...fresh.values),
+    c.env.DB.prepare(`INSERT INTO message_read_state (message_id, is_read)
+      SELECT id, ? FROM messages WHERE id = ? AND expires_at > ? AND inbox_id IN (${ownedInboxIds})
+        AND (${fresh.sql})
+      ON CONFLICT(message_id) DO UPDATE SET is_read = excluded.is_read RETURNING message_id`).bind(
+      Number(isRead),
+      c.req.param("id"),
+      now(),
+      c.get("user").id,
+      ...fresh.values,
+    ),
+  ]);
+  if (!authorized.results.length) credentialConflict();
+  if (!updated.results.length)
+    throw new ApiError(404, "NOT_FOUND", "Pesan tidak ditemukan atau sudah kedaluwarsa.");
+  return c.json({ ok: true });
+});
+messageRoutes.delete("/:id", async (c) => {
+  const fresh = freshSession(c);
+  const [authorized, deleted] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT 1 WHERE ${fresh.sql}`).bind(...fresh.values),
+    c.env.DB.prepare(
+      `DELETE FROM messages WHERE id = ? AND inbox_id IN (${ownedInboxIds}) AND (${fresh.sql}) RETURNING id`,
+    ).bind(c.req.param("id"), c.get("user").id, ...fresh.values),
+  ]);
+  if (!authorized.results.length) credentialConflict();
+  if (!deleted.results.length) throw new ApiError(404, "NOT_FOUND", "Pesan tidak ditemukan.");
+  return c.json({ ok: true });
+});

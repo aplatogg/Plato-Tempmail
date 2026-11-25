@@ -1,0 +1,1998 @@
+/* Plato Mail — framed sheet (gold hourglass + laurel emblem)
+   Direction: framed-sheet (light, seed 527827091). The chrome is one tinted frame;
+   the work sits on a white sheet with a hairline edge and 16px corners, and depth
+   comes from a single tone step — no shadow on anything at rest.
+   Type: IBM Plex Sans, with IBM Plex Mono for addresses, dates and counts.
+   The one hue (#1b6c80) is the brand's, used on the mark and on data only. */
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/plex-sans-latin.woff2") format("woff2");
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/plex-mono-400-latin.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/plex-mono-500-latin.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+
+  --ground: #f6f7f7;
+  --surface: #ffffff;
+  --raised: #f4f6f6;
+  --column: #f8f9f9;
+  --active: #eaeeee;
+  --border: #e6e9e9;
+  --rule: #eef1f1;
+  --control: #ccd1d1;
+  --text: #131416;
+  --muted: #5b6165;
+
+  /* The brand hue lives on the mark and on data only; the one primary is near-black. */
+  --accent: #8a6414;
+  --primary: #131416;
+  --brand: #8a6414;
+  --brand-ink: #ffffff;
+  --positive: #1e7b4f;
+  --negative: #c4242a;
+  --warning: #92400e;
+
+  --pill-positive-bg: #dcfae5;
+  --pill-positive-ink: #04250e;
+  --pill-negative-bg: #ffedea;
+  --pill-negative-ink: #831c1e;
+  --pill-neutral-bg: #ebedee;
+  --pill-neutral-ink: #353736;
+
+  --radius-card: 8px;
+  --radius-control: 6px;
+  --radius-sheet: 16px;
+  --sheet-inset: 8px;
+  --row-height: 48px;
+  --sidebar-width: 228px;
+  --gap: 24px;
+  --pad: 24px;
+  --control-height: 32px;
+
+  --fs-title: 22px;
+  --fs-section: 16px;
+  --fs-body: 14px;
+  --fs-small: 13px;
+  --fs-min: 13px;
+
+  --shadow-float: 0 12px 32px -12px #13141633, 0 2px 8px -4px #1314161a;
+  --z-toast: 50;
+
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ground: #0f1213;
+  --surface: #171b1c;
+  --raised: #1d2224;
+  --column: #141819;
+  --active: #262c2e;
+  --border: #2a3032;
+  --rule: #22282a;
+  --control: #444b4d;
+  --text: #f4f6f6;
+  --muted: #a8b1b3;
+
+  --accent: #e0bf7f;
+  --primary: #f4f6f6;
+  --brand: #e0bf7f;
+  --brand-ink: #0f1213;
+  --positive: #6ee7b7;
+  --negative: #fda4af;
+  --warning: #fbbf24;
+
+  --pill-positive-bg: #0d2a21;
+  --pill-positive-ink: #a7f3d0;
+  --pill-negative-bg: #341518;
+  --pill-negative-ink: #fecdd3;
+  --pill-neutral-bg: #262521;
+  --pill-neutral-ink: #d6d3ca;
+
+  --shadow-float: 0 16px 40px -16px #000000cc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: Native hidden must beat layout rules. */
+  display: none !important;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--ground);
+  color: var(--text);
+}
+
+button,
+input,
+select {
+  font: inherit;
+  font-size: var(--fs-body);
+}
+
+button {
+  min-height: 32px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--control);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  font-weight: 500;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+button:hover {
+  background: var(--raised);
+  border-color: var(--muted);
+}
+
+button:active:not(:disabled) {
+  background: var(--active);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+
+input,
+select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--control);
+  border-radius: var(--radius-control);
+}
+
+input::placeholder {
+  color: var(--muted);
+}
+
+input[aria-invalid="true"] {
+  border-color: var(--negative);
+}
+
+label {
+  display: block;
+  margin: var(--space-4, 16px) 0 6px;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1,
+h2 {
+  margin-bottom: 0;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: var(--fs-title);
+}
+
+h2 {
+  font-size: var(--fs-section);
+}
+
+p {
+  margin-bottom: 12px;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* ---------- Controls ---------- */
+
+.primary {
+  color: var(--brand-ink);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.primary:hover {
+  background: #2c3032;
+  border-color: #2c3032;
+}
+
+:root[data-theme="dark"] .primary {
+  color: var(--brand-ink);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+:root[data-theme="dark"] .primary:hover {
+  background: #ffffff;
+  border-color: #ffffff;
+}
+
+.primary:disabled,
+.primary:disabled:hover {
+  color: var(--muted);
+  background: var(--raised);
+  border-color: var(--border);
+}
+
+.destructive {
+  color: #fff;
+  background: var(--negative);
+  border-color: var(--negative);
+}
+
+.destructive:hover {
+  color: #fff;
+  background: #a01d22;
+  border-color: #a01d22;
+}
+
+.quiet {
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.quiet:hover {
+  color: var(--text);
+  background: var(--raised);
+  border-color: transparent;
+}
+
+.danger-text {
+  color: var(--negative);
+}
+
+.danger-text:hover {
+  color: var(--negative);
+  background: var(--pill-negative-bg);
+  border-color: transparent;
+}
+
+.full {
+  width: 100%;
+}
+
+.muted,
+.small,
+.login-foot {
+  color: var(--muted);
+}
+
+.small {
+  font-size: var(--fs-small);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.brand-mark {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  color: currentColor;
+}
+.brand-wordmark {
+  display: inline-flex;
+  align-items: center;
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: inherit;
+  font-weight: 600;
+  letter-spacing: inherit;
+  line-height: 1;
+  text-transform: lowercase;
+}
+
+.brand-product {
+  padding-left: 8px;
+  color: var(--muted);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  border-left: 1px solid var(--border);
+}
+
+.brand-login {
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.brand-login .brand-wordmark {
+  font-size: 28px;
+  letter-spacing: -0.045em;
+}
+.brand-login .brand-mark {
+  width: 30px;
+  height: 30px;
+}
+
+.brand-login .brand-product {
+  padding-left: 12px;
+  font-size: 11px;
+}
+
+.boot {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+/* ---------- Login ---------- */
+
+.login-layout {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--pad);
+}
+
+.login-panel {
+  width: 100%;
+  max-width: 920px;
+}
+
+.login-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 48px;
+  row-gap: 10px;
+  padding: 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sheet);
+}
+
+.login-intro {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.login-mark {
+  display: block;
+  margin: 0 0 12px;
+}
+
+.login-form-label {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
+.login-intro h1 {
+  margin: 28px 0 8px;
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+.login-intro .muted {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.login-notes {
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 32px;
+}
+
+.login-notes li {
+  position: relative;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.login-notes li::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  background: var(--control);
+  border-radius: 50%;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.login-form label {
+  margin-top: 14px;
+  font-size: 13px;
+}
+
+.login-form label:first-child {
+  margin-top: 0;
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+.login-card .primary {
+  margin-top: 20px;
+  min-height: 40px;
+}
+
+#forgot-open {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.login-foot {
+  margin: 18px 0 0;
+  font-size: 13px;
+}
+
+.login-meta {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 6px;
+  padding-top: 12px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  border-top: 1px solid var(--rule);
+}
+
+.login-card .credit {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.preferences {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.preferences label {
+  margin: 0;
+  font-size: 13px;
+}
+
+.preferences select {
+  width: auto;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+.credit {
+  display: block;
+  padding: 8px;
+  color: var(--muted);
+  font-size: var(--fs-min);
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.credit:hover {
+  color: var(--text);
+}
+
+.workspace-credit {
+  flex: 0 0 auto;
+  padding: 0 0 6px;
+  font-size: var(--fs-min);
+}
+
+.error {
+  margin-top: 10px;
+  padding: 8px 10px;
+  color: var(--pill-negative-ink);
+  font-size: var(--fs-small);
+  background: var(--pill-negative-bg);
+  border-radius: var(--radius-control);
+  overflow-wrap: anywhere;
+}
+
+.success {
+  color: var(--positive);
+  font-weight: 500;
+}
+
+/* ---------- Workspace frame ---------- */
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--ground);
+}
+
+.app-header {
+  display: flex;
+  flex: 0 0 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 16px 0 20px;
+  background: transparent;
+  border: 0;
+}
+
+.header-account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.account-name {
+  display: none;
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  text-overflow: ellipsis;
+}
+
+.header-account button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
+.header-account .quiet {
+  color: var(--muted);
+}
+
+.header-account .quiet:hover {
+  color: var(--text);
+}
+
+.role-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.role-badge {
+  padding: 1px 7px;
+  color: var(--pill-neutral-ink);
+  font-size: var(--fs-min);
+  font-weight: 500;
+  background: var(--pill-neutral-bg);
+  border-radius: 999px;
+}
+
+/* ---------- Layout: sidebar on frame, sheet on white ---------- */
+
+.mail-layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: transparent;
+  border: 0;
+}
+
+.sidebar-top {
+  padding: 4px 12px 0 20px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.section-heading h1,
+.section-heading h2,
+.section-heading .pane-title {
+  margin: 0;
+}
+
+.section-heading .pane-title {
+  font-size: var(--fs-section);
+  font-weight: 600;
+}
+
+#inbox-title {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.sidebar-top .muted {
+  display: none;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 0 6px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-min);
+  font-variant-numeric: tabular-nums;
+  background: var(--pill-neutral-bg);
+  border-radius: 999px;
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+.sidebar-top .primary {
+  min-height: 34px;
+  margin: 12px 0 14px;
+  font-size: var(--fs-body);
+}
+
+.search-label {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: var(--fs-min);
+  font-weight: 500;
+}
+
+.sidebar-top input {
+  min-height: 32px;
+  background: var(--surface);
+}
+
+.sidebar-scroll,
+.messages-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--control) transparent;
+}
+
+.sidebar-scroll {
+  padding: 6px 8px 12px;
+}
+
+.list-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: var(--fs-min);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.compact {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  font-size: var(--fs-body);
+  line-height: 1;
+}
+
+.inbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inbox-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.inbox-item {
+  position: relative;
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 10px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-card);
+}
+
+.inbox-item:hover {
+  background: var(--raised);
+}
+
+/* The selected row takes the nav pill's fill plus a 2px accent edge, drawn as a
+   pseudo-element so it is not a shadow and cannot be read as a hover or a focus ring. */
+.inbox-item[aria-current="true"] {
+  background: var(--active);
+}
+
+.inbox-item[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.inbox-address {
+  overflow-wrap: anywhere;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.inbox-date {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--fs-min);
+  font-variant-numeric: tabular-nums;
+}
+
+.favorite {
+  flex: 0 0 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--muted);
+  font-size: var(--fs-body);
+  background: transparent;
+  border-color: transparent;
+}
+
+.favorite:hover {
+  color: var(--text);
+  background: var(--raised);
+  border-color: transparent;
+}
+
+.favorite[aria-pressed="true"] {
+  color: var(--warning);
+}
+
+@media (min-width: 1024px) {
+  .reader-label {
+    display: inline;
+  }
+}
+
+.unread-count {
+  color: var(--accent);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-min);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-footer {
+  flex: 0 0 auto;
+  padding: 10px 20px 12px;
+  color: var(--muted);
+  font-size: var(--fs-min);
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-footer p {
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+.sidebar-footer #notification-help {
+  display: none;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+  background: var(--positive);
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+/* ---------- The sheet ---------- */
+
+.sheet {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  margin: 0 var(--sheet-inset) var(--sheet-inset) 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sheet);
+}
+
+.scope-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 20px;
+  background: var(--raised);
+  border-bottom: 1px solid var(--border);
+}
+
+.scope-banner p {
+  margin: 0;
+  font-size: var(--fs-small);
+  overflow-wrap: anywhere;
+}
+
+.scope-disclosure {
+  margin: 0;
+  padding: 6px 20px;
+  color: var(--muted);
+  font-size: var(--fs-min);
+  border-bottom: 1px solid var(--rule);
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.messages-pane {
+  grid-column: 1;
+  grid-row: 3;
+  border-right: 1px solid var(--border);
+}
+
+.reader {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.pane-heading {
+  flex: 0 0 auto;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pane-heading .section-heading h1,
+.pane-heading .section-heading h2 {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.selected-address {
+  margin: 2px 0 8px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-min);
+  overflow-wrap: anywhere;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.small-button {
+  min-height: 26px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: var(--fs-min);
+}
+
+.small-button:hover {
+  color: var(--text);
+}
+
+#message-search-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+#message-search-form .search-label {
+  display: none;
+}
+
+#message-search-form input {
+  min-height: 30px;
+  font-size: var(--fs-small);
+}
+
+#message-search-form button {
+  min-height: 30px;
+  font-size: var(--fs-small);
+}
+
+.messages-scroll {
+  padding: 6px 8px 12px;
+  /* The list column carries one tone step so the reader sheet stays white: depth
+     from a tone change rather than a rule, and no blank band under a short list. */
+  background: var(--column);
+}
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.message-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 11px 12px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-card);
+}
+
+.message-item:hover {
+  background: var(--raised);
+}
+
+.message-item[aria-current="true"] {
+  background: var(--active);
+}
+
+.message-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.message-sender {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-date {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-min);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.message-summary {
+  display: block;
+  margin: 2px 0 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.message-preview {
+  display: none;
+}
+
+.message-item.is-unread .message-sender::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  background: var(--accent);
+  border-radius: 50%;
+  vertical-align: 1px;
+}
+
+.unread-badge {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pane-footer {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  color: var(--muted);
+  font-size: var(--fs-min);
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- Reader ---------- */
+
+.reader-toolbar {
+  display: flex;
+  flex: 0 0 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.reader-label {
+  display: none;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
+.favorite::before {
+  content: "";
+  display: block;
+  width: 11px;
+  height: 11px;
+  margin: 0 auto;
+  background: currentColor;
+  opacity: 0.45;
+  clip-path: polygon(
+    50% 0%,
+    61% 35%,
+    98% 35%,
+    68% 57%,
+    79% 91%,
+    50% 70%,
+    21% 91%,
+    32% 57%,
+    2% 35%,
+    39% 35%
+  );
+}
+
+.favorite[aria-pressed="true"]::before {
+  opacity: 1;
+  background: var(--warning);
+}
+
+.reader .message-detail {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--control) transparent;
+}
+
+.message-heading {
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+.message-heading h2 {
+  margin: 6px 0 16px;
+  overflow-wrap: anywhere;
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.message-meta {
+  margin: 0;
+  font-size: var(--fs-small);
+}
+
+.message-meta div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.message-meta dt {
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+.message-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-small);
+  unicode-bidi: plaintext;
+}
+
+#diagnostics-data div {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.message-body {
+  padding: 22px 24px 32px;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-body);
+  line-height: 1.75;
+  white-space: pre-wrap;
+  unicode-bidi: plaintext;
+}
+
+.reader-actions,
+.otp-section {
+  padding: 10px 24px;
+}
+
+.reader-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.reader-actions .error {
+  margin: 0;
+}
+
+.otp-section {
+  border-bottom: 1px solid var(--rule);
+}
+
+.otp-section #otp-candidates button {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.reader-empty {
+  margin: auto;
+  max-width: 340px;
+  padding: var(--pad);
+  color: var(--muted);
+  text-align: center;
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+.reader-empty h2 {
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: var(--fs-section);
+}
+
+.reader-empty p {
+  font-size: var(--fs-body);
+}
+
+.empty-envelope {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 16px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 18px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  color: var(--muted);
+  font-size: var(--fs-min);
+  background: var(--raised);
+  border-radius: 999px;
+}
+
+/* ---------- States ---------- */
+
+.state {
+  padding: var(--pad) 16px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.state.is-error {
+  color: var(--negative);
+}
+
+.retry {
+  display: block;
+  margin: 0 auto 12px;
+  font-size: var(--fs-small);
+}
+
+.load-more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  font-size: var(--fs-small);
+}
+
+.mobile-back {
+  display: none;
+  min-height: 28px;
+  margin-left: -6px;
+  padding: 0 6px;
+  font-size: var(--fs-small);
+}
+
+.mobile-back::before {
+  content: "←";
+  margin-right: 6px;
+}
+
+.workspace[data-view="inboxes"] .messages-pane,
+.workspace[data-view="inboxes"] .reader,
+.workspace[data-view="messages"] .sidebar,
+.workspace[data-view="messages"] .reader,
+.workspace[data-view="reader"] .sidebar,
+.workspace[data-view="reader"] .messages-pane {
+  display: none;
+}
+
+/* ---------- Dialogs ---------- */
+
+dialog {
+  width: min(468px, calc(100% - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 24px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sheet);
+  box-shadow: var(--shadow-float); /* taste-skill-ignore: dialog is a real overlay */
+}
+
+dialog::backdrop {
+  background: #13141666;
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+dialog h2 {
+  margin: 2px 0 10px;
+  font-size: 20px;
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+dialog p {
+  font-size: var(--fs-body);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.address-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+.address-field input {
+  flex: 1;
+  min-width: 120px;
+}
+
+.address-field span {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-small);
+  overflow-wrap: anywhere;
+}
+
+#local-help {
+  margin: 6px 0 0;
+  font-size: var(--fs-min);
+}
+
+.users-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+  overflow-wrap: anywhere;
+}
+
+#users-dialog {
+  width: min(600px, calc(100% - 32px));
+}
+
+#user-create-form {
+  margin-top: 20px;
+}
+
+.role-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.role-fieldset {
+  min-width: 0;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.role-fieldset legend {
+  padding: 0 4px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.role-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 9px;
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.role-options label:has(input:checked) {
+  border-color: var(--text);
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+.role-options input {
+  width: 14px;
+  min-height: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--text);
+}
+
+.role-fieldset[aria-invalid="true"] {
+  border-color: var(--negative);
+}
+
+.notice {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  z-index: var(--z-toast);
+  max-width: calc(100% - 32px);
+  padding: 8px 14px;
+  color: var(--ground);
+  font-size: var(--fs-small);
+  background: var(--text);
+  border-radius: 999px;
+  box-shadow: var(--shadow-float); /* taste-skill-ignore: toast is a real overlay */
+  transform: translateX(-50%);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Desktop ---------- */
+
+@media (min-width: 768px) {
+  .account-name {
+    display: block;
+  }
+}
+
+@media (min-width: 1024px) {
+  .workspace[data-view] .pane {
+    display: flex;
+  }
+}
+
+@media (min-width: 1440px) {
+  .mail-layout {
+    grid-template-columns: 248px minmax(0, 1fr);
+  }
+
+  .sheet {
+    grid-template-columns: 384px minmax(0, 1fr);
+  }
+}
+
+/* ---------- Phone: frame disappears, sheet is the screen ---------- */
+
+@media (max-width: 1023px) {
+  .mail-layout {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+  }
+
+  .sidebar,
+  .sheet {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .workspace[data-view="inboxes"] .sheet {
+    display: none;
+  }
+
+  /* biome-ignore lint/style/noDescendingSpecificity: component override ordering */
+  .sheet {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .messages-pane,
+  .reader {
+    grid-column: 1;
+    grid-row: 3;
+    border-right: 0;
+  }
+
+  .app-header {
+    flex: 0 0 auto;
+    min-height: 48px;
+    height: auto;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .app-header .brand {
+    gap: 8px;
+  }
+
+  .app-header .brand-wordmark {
+    font-size: 11px;
+    letter-spacing: 0.13em;
+  }
+
+  .app-header .brand-product {
+    padding-left: 8px;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+  }
+
+  .sidebar-top {
+    padding: 4px 16px 0;
+  }
+
+  .sidebar-footer {
+    padding: 10px 16px max(10px, env(safe-area-inset-bottom));
+  }
+
+  .mobile-back {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .pane-heading {
+    padding: 8px 16px 10px;
+  }
+
+  .messages-scroll {
+    padding: 4px 6px 12px;
+  }
+
+  .message-heading {
+    padding: 16px;
+  }
+
+  .message-heading h2 {
+    font-size: 19px;
+  }
+
+  .message-body {
+    padding: 16px 16px 24px;
+    font-size: 15px;
+  }
+
+  .reader-actions,
+  .otp-section {
+    padding: 8px 16px;
+  }
+
+  .login-layout {
+    padding: 16px;
+  }
+
+  .login-card {
+    padding: 20px;
+  }
+
+  input,
+  select,
+  #message-search,
+  #inbox-search {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+}
+
+/* ---------- Login below 860px ---------- */
+
+@media (max-width: 859px) {
+  .login-panel {
+    max-width: 440px;
+  }
+
+  .login-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 24px;
+  }
+
+  .login-intro h1 {
+    margin-top: 20px;
+    font-size: 26px;
+  }
+
+  .login-notes {
+    display: grid;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 0;
+  }
+
+  .login-form {
+    margin-top: 22px;
+  }
+}
+
+/* ---------- Account sessions and audit ---------- */
+
+.account-sessions {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.account-sessions h3 {
+  margin: 0 0 4px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.account-sessions > p.small {
+  margin: 0 0 10px;
+}
+
+.session-list,
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 8px 0 0;
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.session-row:last-child,
+.audit-row:last-child {
+  border-bottom: 0;
+}
+
+.session-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.session-main strong {
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.audit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.audit-row strong {
+  font-size: var(--fs-small);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+#audit-dialog {
+  width: min(560px, calc(100% - 32px));
+}
+
+#audit-list {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+/* ---------- Reader extras ---------- */
+
+.reader-nav {
+  display: flex;
+  gap: 2px;
+}
+
+.link-chip {
+  display: inline;
+  min-height: 0;
+  margin: 0 2px;
+  padding: 0 4px;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 500;
+  background: var(--raised);
+  border: 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
+  border-radius: 3px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.link-chip:hover {
+  color: var(--text);
+  background: var(--active);
+}
+
+.attachments {
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.attachments h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.attachments .small {
+  margin: 4px 0 0;
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.attachment-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.attachment-row strong {
+  font-size: var(--fs-small);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.message-html {
+  flex: 1;
+  width: 100%;
+  min-height: 240px;
+  border: 0;
+  background: #fff;
+}
+
+.link-host {
+  margin: 0 0 4px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.link-url {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-min);
+  overflow-wrap: anywhere;
+}
+
+#link-dialog {
+  width: min(520px, calc(100% - 32px));
+}
+
+@media (max-width: 1023px) {
+  .attachments {
+    padding: 10px 16px;
+  }
+
+  .message-html {
+    min-height: 200px;
+  }
+}
+
+.unread-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  vertical-align: 1px;
+  background: var(--negative);
+  border-radius: 50%;
+}
+
+.badge-unread {
+  color: var(--pill-negative-ink);
+  background: var(--pill-negative-bg);
+}
+
+/* Unread is carried by the weight of the address and a 4px count mark, the way a
+   mail client does it. A blinking row was a tell and could not be read as data. */
+.inbox-item.has-unread .inbox-address {
+  font-weight: 600;
+}
+
+.unread-count {
+  color: var(--negative);
+  font-weight: 600;
+}
+
+/* ---------- Retention strip ----------
+   The one figure only this product has: where a message sits inside its
+   retention window. A track as long as the window, the elapsed share filled,
+   both ends labelled, so the bar cannot be misread as a progress of something else. */
+
+.expiry-strip {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.expiry-label {
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+.expiry-track {
+  height: 6px;
+  overflow: hidden;
+  background: var(--raised);
+  border-radius: 999px;
+}
+
+.expiry-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.expiry-value {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-min);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Tablet (640–1023): the address list keeps its column ----------
+   A mail client on a tablet holds the address list beside the open pane. The
+   single-region rule below 640 is what makes a phone usable, but applied at 768
+   it left 584px of nothing under two addresses, which is not a deliberate rest. */
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .mail-layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    flex-direction: row;
+  }
+
+  .sidebar,
+  .sheet {
+    flex: none;
+  }
+
+  .workspace[data-view] .sidebar,
+  .workspace[data-view] .sheet,
+  .workspace[data-view] .messages-pane {
+    display: flex;
+  }
+
+  .workspace[data-view] .sheet {
+    display: grid;
+  }
+
+  .workspace[data-view="messages"] .reader,
+  .workspace[data-view="inboxes"] .reader {
+    display: none;
+  }
+
+  .sheet {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    margin: 0 var(--sheet-inset) var(--sheet-inset) 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sheet);
+  }
+
+  .messages-pane,
+  .reader {
+    grid-column: 1;
+    grid-row: 1;
+    border-right: 0;
+  }
+
+  .mobile-back {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inbox-item.has-unread {
+    animation: none;
+  }
+}
+.api-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.api-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--raised);
+  border-radius: var(--radius-card);
+}
+.api-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.api-name {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.api-token {
+  margin-top: 12px;
+}
+.api-token input {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: var(--fs-small);
+}
+
+/* Login: "trust this device" keeps the session for 30 days. */
+.trust-device {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+
+.trust-device input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
